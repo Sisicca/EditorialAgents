@@ -1,4 +1,5 @@
 models/*
+!models/README.md
 
 config/config.yaml
 
