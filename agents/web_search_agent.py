@@ -76,29 +76,3 @@ class WebSearchAgent:
             )
 
         return response_results
-
-if __name__ == '__main__':
-    config = {
-        'api_key': os.getenv('OPENAI_API_KEY'),
-        'base_url': os.getenv('OPENAI_BASE_URL'),
-        'model': 'gpt-4o',
-        'search_engine': 'tavily',
-        'search_api_key': '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',
-        'web_num': 3
-    }
-    
-    test_websearch_agent = WebSearchAgent(
-        config=config
-    )
-    
-    # search_results = test_websearch_agent._search(
-    #     queries=['跑步表现与睡眠质量', '心血管健康对跑步的重要性']
-    # )
-    
-    # print(search_results)
-    
-    response_results = test_websearch_agent.response(
-        queries=['气温如何影响跑步表现？']
-    )
-    
-    pprint(response_results)

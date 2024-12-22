@@ -6,5 +6,3 @@ knowledge_base/running
 knowledge_base/sleep
 
 .DS_Store
-
-agents/agents_test.ipynb
