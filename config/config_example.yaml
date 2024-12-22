@@ -1,0 +1,29 @@
+initial_analysis:
+  api_key: "YOUR OPENAI_API_KEY"
+  base_url: "YOUR OPENAI_BASE_URL"
+  model: "model"
+
+web_search:
+  api_key: "YOUR OPENAI_API_KEY"
+  base_url: "YOUR OPENAI_BASE_URL"
+  model: "model"
+  search_engine: "tavily"
+  search_api_key: "YOUR TAVILY_API_KEY"
+  web_num: 5
+
+local_kb:
+  api_key: "YOUR OPENAI_API_KEY"
+  base_url: "YOUR OPENAI_BASE_URL"
+  model: "model"
+  kb_path: ""
+  embedding_model: ""
+  reranker_model: ""
+  k: 100
+  top_n: 5
+  chunk_size: 1200
+  chunk_overlap: 200
+
+comprehensive_answer:
+  api_key: "YOUR OPENAI_API_KEY"
+  base_url: "YOUR OPENAI_BASE_URL"
+  model: "model"
