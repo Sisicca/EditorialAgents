@@ -85,11 +85,11 @@ class LocalKBAgent:
             texts_list += texts
         
         embeddingsModel = HuggingFaceEmbeddings(model_name=embedding_model,
-                                                model_kwargs={"device": "mps"},
+                                                model_kwargs={"device": "cpu"},
                                                 encode_kwargs={"normalize_embeddings": True})
         retriever = FAISS.from_documents(texts_list, embeddingsModel).as_retriever(search_type='similarity', search_kwargs={"k": k})
         
-        crossEncoderModel = HuggingFaceCrossEncoder(model_name=reranker_model, model_kwargs={"device": "mps"})
+        crossEncoderModel = HuggingFaceCrossEncoder(model_name=reranker_model, model_kwargs={"device": "cpu"})
         compressor = CrossEncoderReranker(model=crossEncoderModel, top_n=top_n)
         
         self.retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=retriever)
