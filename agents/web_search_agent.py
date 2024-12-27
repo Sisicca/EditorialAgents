@@ -105,6 +105,6 @@ class WebSearchAgent:
                     except Exception as e:
                         logger.error(f"精炼节点 '{node['title']}' 的文档失败: {e}")
                 
-                pbar.update(1)
+                    pbar.update(1)
         
         return framework
