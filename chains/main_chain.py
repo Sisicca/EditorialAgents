@@ -20,31 +20,14 @@ class ScienceArticleChain:
         self.comprehensive_agent = ComprehensiveAnswerAgent(config['comprehensive_answer'])
     
     def run(self, topic, description, problem):
-        # 初步分析
-        logger.info("正在分析问题...")
-        analysis_output = self.initial_agent.analyze(topic, description, problem)
-        framework = analysis_output['framework']
-        queries = analysis_output['queries']
-        hypothetical_doc = analysis_output['hypothetical_doc']
+        framework = self.initial_agent.get_framework(
+            topic=topic, description=description, problem=problem
+        )
         
-        pprint(framework)
-        pprint(queries)
-        pprint(hypothetical_doc)
+        self.web_search_agent.search_for_leaf_nodes(framework=framework)
         
-        # 网络检索并回答
-        logger.info("正在通过网络回答问题...")
-        web_response_results = self.web_search_agent.response(queries)
+        self.local_kb_agent.search_for_leaf_nodes(framework=framework)
         
-        pprint(web_response_results)
+        self.comprehensive_agent.compose(framework=framework)
         
-        # 本地知识库检索并回答
-        logger.info("正在通过本地知识库回答问题...")
-        local_response_results = self.local_kb_agent.response(hypothetical_doc)
-        
-        pprint(local_response_results)
-        
-        # 补全框架 撰写全文
-        logger.info("正在撰写全文...")
-        article = self.comprehensive_agent.generate(framework, web_response_results, local_response_results)
-        
-        return article
+        return framework.outline.get('content')

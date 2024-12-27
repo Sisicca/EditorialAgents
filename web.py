@@ -1,6 +1,4 @@
 import streamlit as st
-import yaml
-from agents.initial_analysis_agent import InitialAnalysisAgent
 
 # 初始化会话状态中的大纲字典
 if 'outline_dict' not in st.session_state:
@@ -155,7 +153,7 @@ if 'outline_dict' not in st.session_state:
         }
     ]
 }
-    
+
 def display_outline(outline_dict):
     # 提取论文主标题 1级
     # 1级 放入container
@@ -269,25 +267,5 @@ def add_class(outline_dict, path:list):
             'children': []
         }
     )
-    
 
-def load_config(config_path='config/config.yaml'):
-    with open(config_path, 'r') as file:
-        return yaml.safe_load(file)
-
-def test_initial_agent():
-    config = load_config()
-    
-    test_analysis_agent = InitialAnalysisAgent(config=config["initial_analysis"])
-    
-    response = test_analysis_agent.analyze(
-        topic='睡眠、健康、环境与跑步表现',
-        description=('我希望能写作一篇总结影响跑步表现的各种因素的文章，包括但不限于睡眠因素、健康因素、环境因素等等。'
-                     '需要全面且详细的总结出各种可能的因素，分门别类且轻重有序。'
-                     '对于每一个因素需要给出它的作用机制，即它是如何一步一步影响到人的跑步表现的。'),
-        problem='影响跑步表现的因素有哪些？它们是如何影响跑步的？'
-    )
-    st.session_state.outline_dict = response
-
-test_initial_agent()
 display_outline(st.session_state.outline_dict)

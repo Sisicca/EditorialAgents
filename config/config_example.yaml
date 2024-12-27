@@ -10,6 +10,8 @@ web_search:
   search_engine: "tavily"
   search_api_key: "YOUR TAVILY_API_KEY"
   web_num: 5
+  max_length: "MAX LENGTH OF WEB DOCUMENT"
+  max_workers: "THE MAX CONCURRENCY NUM OF WEB SEARCH AND REFINE"
 
 local_kb:
   api_key: "YOUR OPENAI_API_KEY"
@@ -22,8 +24,11 @@ local_kb:
   top_n: 5
   chunk_size: 1200
   chunk_overlap: 200
+  device: "YOUR DEVICE CUDA/CPU/MPS..."
+  max_workers: "THE MAX CONCURRENCY NUM OF HY_DOC GENERATE AND REFINE"
 
 comprehensive_answer:
   api_key: "YOUR OPENAI_API_KEY"
   base_url: "YOUR OPENAI_BASE_URL"
   model: "model"
+  max_workers: "THE MAX CONCURRENCY NUM OF COMPOSE"

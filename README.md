@@ -18,3 +18,28 @@ Agents:
     - 给检索到的文档生成总结
   - 综合回答agent（gpt4o）
     - 根据所有检索文档和整体框架，分段落地完成写作
+
+初始化环境
+```bash
+conda create -n new_env python=3.10
+pip install -r requirements.txt
+```
+
+下载模型
+```bash
+cd models
+git clone https://www.modelscope.cn/maidalun/bce-embedding-base_v1.git
+git clone https://www.modelscope.cn/maidalun/bce-reranker-base_v1.git
+```
+
+配置 config/config.yaml
+
+一键成文
+```bash
+python main.py
+```
+
+交互页面
+```bash
+streamlit run web.py
+```
