@@ -77,6 +77,9 @@ EditorialAgents 由以下几个关键组件组成：
   - [Query Rewriting for Retrieval-Augmented Large Language Models](https://arxiv.org/pdf/2305.14283)
   - [RECOMP: IMPROVING RETRIEVAL-AUGMENTED LMs WITH COMPRESSION AND SELECTIVE AUGMENTATION](https://arxiv.org/pdf/2310.04408)
 
+- **详细说明**
+  - 请参阅 [EditorialAgents - 核心模块](agents/README.md) 以获取详细信息。
+
 ## 前提条件
 
 在配置 `config.yaml` 文件之前，请确保具备以下条件：
