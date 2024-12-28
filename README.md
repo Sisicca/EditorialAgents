@@ -58,7 +58,6 @@ EditorialAgents 由以下几个关键组件组成：
 
 - **问题初步分析 Agent（gpt4o）**
   - 分析问题并给出框架
-  - 参考文献：[arXiv:2212.10496](https://arxiv.org/pdf/2212.10496)
   
 - **网络检索 Agent（gpt3.5-turbo）**
   - 使用 Tavily 搜索引擎进行关键词检索
@@ -71,6 +70,12 @@ EditorialAgents 由以下几个关键组件组成：
   
 - **综合回答 Agent（gpt4o）**
   - 根据所有检索文档和整体框架，分段落完成写作
+
+- **参考文献** 
+  - [Precise Zero-Shot Dense Retrieval without Relevance Labels](https://arxiv.org/pdf/2212.10496)
+  - [SAIL: Search-Augmented Instruction Learning](https://arxiv.org/pdf/2305.15225)
+  - [Query Rewriting for Retrieval-Augmented Large Language Models](https://arxiv.org/pdf/2305.14283)
+  - [RECOMP: IMPROVING RETRIEVAL-AUGMENTED LMs WITH COMPRESSION AND SELECTIVE AUGMENTATION](https://arxiv.org/pdf/2310.04408)
 
 ## 前提条件
 
