@@ -1,1 +1,0 @@
-按照config_example.yaml，自行配置config.yaml
