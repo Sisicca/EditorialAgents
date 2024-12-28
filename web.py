@@ -1,160 +1,17 @@
 import streamlit as st
+import pandas as pd
+import os
+import yaml
+from agents.initial_analysis_agent import InitialAnalysisAgent
+from typing import List
+from copy import deepcopy
+from agents.initial_analysis_agent import ArticleOutline, InitialAnalysisAgent
+from agents.web_search_agent import WebSearchAgent
+from agents.local_kb_agent import LocalKBAgent
+from agents.comprehensive_answer_agent import ComprehensiveAnswerAgent
 
-# 初始化会话状态中的大纲字典
-if 'outline_dict' not in st.session_state:
-    st.session_state.outline_dict = {
-    'title': '睡眠、健康、环境与跑步表现',
-    'level': 1,
-    'summary': '全面探讨影响跑步表现的多种因素，包括睡眠、健康和环境等，并分析其作用机制及对跑步表现的影响。',
-    'children': [
-        {
-            'title': '引言',
-            'level': 2,
-            'summary': '概述跑步表现的重要性及其受到多种因素影响的复杂性，阐明研究这些因素的意义。',
-            'children': []
-        },
-        {
-            'title': '睡眠对跑步表现的影响',
-            'level': 2,
-            'summary': '分析睡眠质量和睡眠时长如何影响跑步表现及其背后的生理机制。',
-            'children': [
-                {
-                    'title': '睡眠质量与恢复',
-                    'level': 3,
-                    'summary': '探讨高质量的睡眠如何通过促进肌肉恢复和降低疲劳来提高跑步表现。',
-                    'children': []
-                },
-                {
-                    'title': '睡眠不足对身体机能的影响',
-                    'level': 3,
-                    'summary': '分析睡眠不足如何导致反应时间延迟、耐力下降以及精神专注力降低。',
-                    'children': []
-                },
-                {
-                    'title': '昼夜节律与运动表现',
-                    'level': 3,
-                    'summary': '讨论昼夜节律如何通过调节体温和荷尔蒙分泌影响跑步表现。',
-                    'children': []
-                }
-            ]
-        },
-        {
-            'title': '健康因素对跑步表现的影响',
-            'level': 2,
-            'summary': '阐述健康状况，包括饮食、免疫力和心理健康等对跑步表现的作用机制。',
-            'children': [
-                {
-                    'title': '营养摄入与能量供给',
-                    'level': 3,
-                    'summary': '介绍饮食结构如何通过提供能量和维持代谢功能影响跑步表现。',
-                    'children': [
-                        {
-                            'title': '碳水化合物摄入与跑步耐力',
-                            'level': 4,
-                            'summary': '分析碳水化合物储备如何支持长时间跑步中的能量需求。',
-                            'children': []
-                        },
-                        {
-                            'title': '微量营养素在运动中的作用',
-                            'level': 4,
-                            'summary': '探讨维生素和矿物质如何通过支持代谢和免疫功能影响跑步表现。',
-                            'children': []
-                        }
-                    ]
-                },
-                {
-                    'title': '免疫系统与跑步恢复',
-                    'level': 3,
-                    'summary': '分析免疫系统强弱如何影响运动后恢复速度和整体表现。',
-                    'children': []
-                },
-                {
-                    'title': '心理健康与动机',
-                    'level': 3,
-                    'summary': '探讨心理健康和跑步动机如何通过情绪调节和压力管理影响表现。',
-                    'children': []
-                }
-            ]
-        },
-        {
-            'title': '环境因素对跑步表现的影响',
-            'level': 2,
-            'summary': '分析外部环境条件如气温、湿度和海拔对跑步表现的具体影响。',
-            'children': [
-                {
-                    'title': '气温与跑步效率',
-                    'level': 3,
-                    'summary': '讨论高温或低温环境如何影响体温调节和能量消耗。',
-                    'children': []
-                },
-                {
-                    'title': '湿度与脱水风险',
-                    'level': 3,
-                    'summary': '分析湿度对体液平衡和耐力的影响及导致脱水的风险。',
-                    'children': []
-                },
-                {
-                    'title': '海拔高度与氧气供应',
-                    'level': 3,
-                    'summary': '探讨高海拔环境中氧气稀薄如何影响跑步中的有氧代谢能力。',
-                    'children': []
-                }
-            ]
-        },
-        {
-            'title': '综合因素的相互作用',
-            'level': 2,
-            'summary': '分析睡眠、健康和环境因素如何相互作用，共同影响跑步表现。',
-            'children': [
-                {
-                    'title': '睡眠与健康的交互影响',
-                    'level': 3,
-                    'summary': '探讨睡眠不足如何削弱免疫力，并进一步影响跑步恢复。',
-                    'children': []
-                },
-                {
-                    'title': '环境与健康的联动效应',
-                    'level': 3,
-                    'summary': '分析极端环境条件如何加剧身体负担，对健康和表现产生复合影响。',
-                    'children': []
-                }
-            ]
-        },
-        {
-            'title': '改善跑步表现的建议',
-            'level': 2,
-            'summary': '基于上述分析，提出提高跑步表现的实际策略。',
-            'children': [
-                {
-                    'title': '优化睡眠质量',
-                    'level': 3,
-                    'summary': '提供改善睡眠的具体建议，如制定规律的作息时间和优化睡眠环境。',
-                    'children': []
-                },
-                {
-                    'title': '健康管理与饮食策略',
-                    'level': 3,
-                    'summary': '建议通过科学饮食和健康管理来提升跑步能力。',
-                    'children': []
-                },
-                {
-                    'title': '环境适应训练',
-                    'level': 3,
-                    'summary': '提出通过适应性训练提高在不同环境条件下的跑步表现。',
-                    'children': []
-                }
-            ]
-        },
-        {
-            'title': '结论',
-            'level': 2,
-            'summary': '总结睡眠、健康和环境因素对跑步表现的综合影响，并展望未来研究方向。',
-            'children': []
-        }
-    ]
-}
 
-def display_outline(outline_dict):
+def display_outline_editable(outline_dict):
     # 提取论文主标题 1级
     # 1级 放入container
     class_1_title, class_1_summary, class_2_list = outline_dict['title'], outline_dict['summary'], outline_dict['children']
@@ -268,4 +125,184 @@ def add_class(outline_dict, path:list):
         }
     )
 
-display_outline(st.session_state.outline_dict)
+def display_outline_static(outline_dict):
+    # 提取论文主标题 1级
+    class_1_title, class_1_summary, class_2_list = outline_dict['title'], outline_dict['summary'], outline_dict['children']
+    
+    with st.container():
+        st.markdown(f"## {class_1_title}")
+        st.write(class_1_summary)
+    
+    # 遍历 2级
+    for i, class_2 in enumerate(class_2_list):
+        i_class_2_title, i_class_2_summary, i_class_3_list = class_2['title'], class_2['summary'], class_2['children']
+        
+        docs_list = []
+        
+        docs_list.append(class_2.get('web_docs_refined', []))
+        docs_list.append(class_2.get('kb_docs_refined', []))
+        
+        with st.expander(f"**{i+1}. {i_class_2_title}**", expanded=False):
+            st.markdown(f"**概述:** {i_class_2_summary}")
+            
+            # 遍历当前 2级 下的所有 3级
+            for si, i_class_3 in enumerate(i_class_3_list):
+                i_si_class_3_title, i_si_class_3_summary, i_si_class_4_list = i_class_3['title'], i_class_3['summary'], i_class_3['children']
+                
+                docs_list.append(i_class_3.get('web_docs_refined', []))
+                docs_list.append(i_class_3.get('kb_docs_refined', []))
+                
+                st.markdown(f"### {i+1}.{si+1} {i_si_class_3_title}")
+                st.markdown(f"**概述:** {i_si_class_3_summary}")
+                
+                # 遍历当前 3级 下的所有 4级
+                for ssi, i_si_class_4 in enumerate(i_si_class_4_list):
+                    i_si_ssi_class_4_title, i_si_ssi_class_4_summary = i_si_class_4['title'], i_si_class_4['summary']
+                    
+                    docs_list.append(i_si_class_4.get('web_docs_refined', []))
+                    docs_list.append(i_si_class_4.get('kb_docs_refined', []))
+                        
+                    st.markdown(f"#### {i+1}.{si+1}.{ssi+1} {i_si_ssi_class_4_title}")
+                    st.markdown(f"**概述:** {i_si_ssi_class_4_summary}")
+    
+            delete_docs_ij = display_documents(docs_list=docs_list, label=f"{i+1}.相关文档")
+            delete_documents(docs_list=docs_list, delete_docs_ij=delete_docs_ij)
+        
+    return
+
+def display_documents(docs_list:List[List[str]], label:str):
+    with st.popover(label):
+        delete_doc_ij = []
+        save_doc = True
+        for i, docs in enumerate(docs_list):
+            for j, doc in enumerate(docs):
+                cols = st.columns([8, 2])
+                with cols[0]:
+                    st.text(doc[:200])
+                with cols[1]:
+                    save_doc = st.checkbox("使用文档", key=f"{i}{j}{doc}", value=True)
+                if not save_doc:
+                    delete_doc_ij.append((i, j))
+        return delete_doc_ij
+
+def delete_documents(docs_list, delete_docs_ij):
+    for i, j in delete_docs_ij:
+        docs_list[i][j] = "No Document Here"
+
+def load_config(config_path='config/config.yaml'):
+    with open(config_path, 'r') as file:
+        return yaml.safe_load(file)
+
+def folder_selector(folder_path='knowledge_base'):
+    folder_paths = []
+    for dirpath, _, _ in os.walk(folder_path):
+        folder_paths.append(dirpath)
+    selected_foldername = st.selectbox('选择知识库', folder_paths)
+    pdf_list = os.listdir(selected_foldername)
+    pdf_list = [f for f in pdf_list if f.endswith(".pdf")]
+    df = pd.DataFrame(pdf_list, columns=["文章列表"])
+    st.dataframe(df, width=1000)
+    return selected_foldername
+
+def main():
+    # 初始化会话状态
+    if 'step' not in st.session_state:
+        st.session_state.step = 1
+    if 'outline_dict' not in st.session_state:
+        st.session_state.outline_dict = ""
+    if 'article' not in st.session_state:
+        st.session_state.article = ""
+
+    st.title("_Editorial_ :blue[Agents] :memo:")
+
+    config = load_config()
+
+    if st.session_state.step == 1:
+        st.header("第一步：输入文章信息")
+
+        # 创建三列用于并排输入
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            topic = st.text_input("文章主题", "")
+        with col2:
+            description = st.text_area("具体描述", "")
+        with col3:
+            problem = st.text_area("想要解决的问题", "")
+
+        if st.button("生成文章大纲"):
+            if not topic:
+                st.error("请填写文章主题。")
+            else:
+                with st.spinner("生成文章大纲中..."):
+                    st.session_state.initial_agent = InitialAnalysisAgent(config=config['initial_analysis'])
+                    st.session_state.outline_dict = st.session_state.initial_agent.get_framework(topic=topic, description=description, problem=problem)
+                    st.session_state.step = 2
+                    st.rerun()
+
+    elif st.session_state.step == 2:
+        st.header("第二步：修改文章大纲")
+
+        st.subheader("文章大纲")
+        # 使用文本区域显示并允许用户修改大纲
+        display_outline_editable(st.session_state.outline_dict.outline)
+        
+        st.subheader("本地知识库")
+        use_kb = st.toggle("启用本地知识库搜索相关文章辅助写作")
+        if use_kb:
+            foldername = folder_selector()
+        
+        st.subheader("联网搜索")
+        use_web = st.toggle("启用联网搜索相关文章辅助写作")
+
+        if not use_kb and not use_web:
+            if st.button("确认大纲并直接生成文章"):
+                with st.spinner("生成文章中..."):
+                    st.session_state.compose_agent = ComprehensiveAnswerAgent(config=config['comprehensive_answer'])
+                    st.session_state.compse_agent.compose(st.session_state.outline_dict)
+                    st.session_state.step = 4
+                    st.rerun()
+        else:
+            if st.button("确认大纲并开始检索相关文档"):
+                with st.spinner("检索文档中..."):
+                    if use_web:
+                        st.session_state.web_agent = WebSearchAgent(config=config['web_search'])
+                        st.session_state.web_agent.search_for_leaf_nodes(st.session_state.outline_dict)
+                    if use_kb:
+                        config['local_kb']['kb_path'] = foldername
+                        st.session_state.kb_agent = LocalKBAgent(config=config['local_kb'])
+                        st.session_state.kb_agent.search_for_leaf_nodes(st.session_state.outline_dict)
+                    st.session_state.step = 3
+                    st.rerun()
+
+    elif st.session_state.step == 3:
+        st.header("第三步：完成检索")
+        temp_outline = deepcopy(st.session_state.outline_dict.outline)
+        display_outline_static(temp_outline)
+        
+        if st.button("确认文档并开始生成文章"):
+            with st.spinner("生成文章中..."):
+                st.session_state.compose_agent = ComprehensiveAnswerAgent(config=config['comprehensive_answer'])
+                st.session_state.outline_dict = ArticleOutline(temp_outline)
+                st.session_state.compose_agent.compose(st.session_state.outline_dict)
+                st.session_state.step = 4
+                st.rerun()
+
+    elif st.session_state.step == 4:
+        st.header("第四步：生成完成")
+
+        st.subheader("生成的文章")
+        article = st.session_state.outline_dict.outline.get('content')
+        article_name = st.session_state.outline_dict.outline.get('title')
+        st.markdown(article)
+        st.download_button("下载文章", article, file_name=f"{article_name}.txt")
+
+        # 提供重新开始的选项
+        if st.button("重新开始"):
+            st.session_state.step = 1
+            st.session_state.outline = ""
+            st.session_state.article = ""
+            st.rerun()
+
+if __name__ == "__main__":
+    main()
