@@ -254,7 +254,7 @@ comprehensive_answer:
 - **embedding_model**：用于生成 KB 条目嵌入的模型。
 - **reranker_model**：用于重新排序检索到的 KB 条目的模型。
 - **k**：从知识库中考虑的顶级条目数量。
-- **top_n**：处理后返回的顶级结果数量。
+- **top_n**：重排后返回的顶级结果数量。
 - **chunk_size**：处理大文档时每个数据块的大小。
 - **chunk_overlap**：数据块之间的重叠量，以确保上下文的连贯性。
 - **device**：用于计算的硬件设备（`CUDA`，`CPU`，`MPS` 等）。
@@ -284,8 +284,8 @@ local_kb:
   base_url: "https://api.openai.com/v1"
   model: "gpt-3.5-turbo"
   kb_path: "/path/to/your/kb"
-  embedding_model: "embedding-model-name"
-  reranker_model: "reranker-model-name"
+  embedding_model: "models/bce-embedding-base_v1"
+  reranker_model: "models/bce-reranker-base_v1"
   k: 100
   top_n: 5
   chunk_size: 1200
@@ -324,6 +324,7 @@ streamlit run web.py
 - **连接问题**：验证 `base_url` 的值是否正确，并确保网络允许对这些 URL 的外部请求。
 - **资源限制**：如果遇到性能问题，可以考虑调整 `max_workers` 参数以更好地适应系统能力。
 - **模型兼容性**：确保指定的模型可用且与你的 API 订阅兼容。
+- **检索模型和重排模型**：当前版本只支持bce模型，确保你使用的是正确的bce模型。
 
 ## 许可协议
 
@@ -331,4 +332,4 @@ streamlit run web.py
 
 ---
 
-如需进一步帮助，请联系 [huangkywork@163.com](mailto:huangkywork@163.com) 或访问我们的 [文档](https://your-project-docs.com)。
+如需进一步帮助，请联系 [huangkywork@163.com](mailto:huangkywork@163.com)。
