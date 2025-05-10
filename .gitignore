@@ -11,3 +11,6 @@ knowledge_base/sleep
 *.ipynb
 
 */__pycache__
+
+# uv虚拟环境
+.venv
