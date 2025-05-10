@@ -333,10 +333,9 @@ class UnifiedRetrievalAgent:
         retry_count = 0
         while retry_count < self.max_retries:
             try:
-                # 使用hypothetical文档方法进行本地检索
-                # 需要传递title和summary来生成hypothetical文档
-                hypothetical_doc = self.local_kb_agent._generate_hypothetical_doc(title=query, summary=query)
-                raw_results = self.local_kb_agent._search_docs(hypothetical_doc)
+                # 直接使用查询，与web_search保持一致的检索schema
+                # 不再使用hypothetical文档方法
+                raw_results = self.local_kb_agent._search_docs(query)
                 
                 # 转换为Document格式
                 results = []

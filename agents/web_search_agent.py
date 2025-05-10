@@ -37,9 +37,14 @@ class WebSearchAgent:
                 include_raw_content=True
             )
             
+            # 添加对raw_results的检查，确保它不是None
+            if raw_results is None:
+                logger.warning(f"搜索结果为None (标题: {title})")
+                return []
+            
             # 返回包含必要信息的结构化结果，而不是仅仅返回内容字符串
             structured_results = []
-            for result in raw_results['results']:
+            for result in raw_results.get('results', []):  # 使用get方法安全地访问'results'
                 if 'raw_content' in result:
                     structured_results.append({
                         'content': result['raw_content'][:self.max_length],
