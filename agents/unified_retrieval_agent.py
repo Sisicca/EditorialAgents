@@ -269,6 +269,21 @@ class UnifiedRetrievalAgent:
         all_results.extend(kb_results)
         logger.info(f"检索完成，共获取 {len(all_results)} 个结果")
         
+        # 添加回退机制
+        if not all_results:
+            logger.warning(f"节点 '{node['title']}' 未检索到任何结果，添加回退内容")
+            fallback_content = f"关于'{node['title']}'的内容。\n\n{node['summary']}"
+            all_results.append(Document(
+                content=fallback_content,
+                source='generated',
+                query=node['title'],
+                metadata={
+                    'title': f"自动生成: {node['title']}",
+                    'url': '',
+                    'score': 1.0
+                }
+            ))
+        
         return all_results
     
     def _execute_web_search_with_retry(self, query):
@@ -346,7 +361,7 @@ class UnifiedRetrievalAgent:
         """将网络检索结果转换为统一的Document格式
         
         Args:
-            result: 网络检索结果
+            result: 网络检索结果 (结构化字典)
             query: 检索查询
             
         Returns:
@@ -369,18 +384,22 @@ class UnifiedRetrievalAgent:
         """将本地知识库检索结果转换为统一的Document格式
         
         Args:
-            doc: 本地知识库检索结果
+            doc: 本地知识库检索结果 (结构化字典)
             query: 检索查询
             
         Returns:
             Document: 统一格式的文档
         """
-        metadata = {}
-        if hasattr(doc, 'metadata'):
-            metadata = doc.metadata.copy()
+        # 直接使用doc中的metadata
+        metadata = doc.get('metadata', {})
+        
+        # 添加其他重要字段到metadata
+        for key in ['source', 'title', 'page', 'author']:
+            if key in doc and key not in metadata:
+                metadata[key] = doc[key]
         
         return Document(
-            content=doc.page_content if hasattr(doc, 'page_content') else str(doc),
+            content=doc.get('content', ''),
             source='kb',
             query=query, 
             metadata=metadata

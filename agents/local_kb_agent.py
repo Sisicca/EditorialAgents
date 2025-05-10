@@ -143,10 +143,29 @@ class LocalKBAgent:
             logger.error(f"生成假设性文档失败 (标题: {title}): {e}")
             return ""
     
-    def _search_docs(self, hypothetical_doc: str) -> List[str]:        
+    def _search_docs(self, hypothetical_doc: str) -> List[dict]:        
         try:
             kb_docs = self.retriever.invoke(hypothetical_doc)
-            return [doc.page_content for doc in kb_docs]
+            
+            # 返回包含必要信息的结构化结果，而不是仅仅返回内容字符串
+            structured_results = []
+            for doc in kb_docs:
+                # 提取并组织元数据
+                metadata = {}
+                if hasattr(doc, 'metadata'):
+                    metadata = doc.metadata.copy()
+                
+                # 创建结构化结果
+                structured_results.append({
+                    'content': doc.page_content,
+                    'metadata': metadata,
+                    'source': metadata.get('source', ''),
+                    'title': metadata.get('title', ''),
+                    'page': metadata.get('page', 0),
+                    'author': metadata.get('author', ''),
+                })
+                
+            return structured_results
         except Exception as e:
             logger.error(f"检索文档失败: {e}")
             return []
