@@ -49,7 +49,7 @@ class Document:
 class UnifiedRetrievalAgent:
     """统一检索智能体，整合网络和本地知识库检索"""
     
-    def __init__(self, web_config: Dict[str, Any], kb_config: Dict[str, Any]):
+    def __init__(self, web_config: Dict[str, Any], kb_config: Dict[str, Any], unified_config: Dict[str, Any]):
         """初始化统一检索智能体
         
         Args:
@@ -61,22 +61,22 @@ class UnifiedRetrievalAgent:
         self.local_kb_agent = LocalKBAgent(kb_config)
         
         # 配置参数
-        self.max_iterations = web_config.get('max_iterations', 3)
-        self.max_workers = web_config.get('max_workers', 4)
-        self.web_concurrency = web_config.get('max_concurrency', 5)
-        self.kb_concurrency = kb_config.get('max_concurrency', 2)
-        self.similarity_threshold = web_config.get('similarity_threshold', 0.7)
+        self.max_iterations = unified_config.get('max_iterations', 3)
+        self.max_workers = unified_config.get('max_workers', 4)
+        self.web_concurrency = unified_config.get('web_max_concurrency', 5)
+        self.kb_concurrency = unified_config.get('local_max_concurrency', 2)
+        self.similarity_threshold = unified_config.get('similarity_threshold', 0.7)
         
         # 错误处理和重试配置
-        self.max_retries = web_config.get('max_retries', 3)
-        self.retry_delay = web_config.get('retry_delay', 1)
+        self.max_retries = unified_config.get('max_retries', 3)
+        self.retry_delay = unified_config.get('retry_delay', 1)
         
         # 初始化OpenAI客户端
         self.llm = OpenAI(
-            api_key=web_config['api_key'],
-            base_url=web_config['base_url']
+            api_key=unified_config['api_key'],
+            base_url=unified_config['base_url']
         )
-        self.model = web_config['model']
+        self.model = unified_config['model']
         
         # 初始化提示模板
         self.prompts = PROMPTS
@@ -139,6 +139,8 @@ class UnifiedRetrievalAgent:
             logger.warning(f"无法解析为JSON: {response}，错误: {str(e)}")
             # 降级处理: 使用标题作为查询
             queries = [node['title']]
+        
+        print(queries)
         
         all_used_queries = queries.copy()
         iteration = 0
@@ -575,7 +577,7 @@ class UnifiedRetrievalAgent:
             response = self.llm.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
+                temperature=1,
             )
             return response.choices[0].message.content
         except Exception as e:

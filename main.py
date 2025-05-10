@@ -1,6 +1,6 @@
 import yaml
 from chains.main_chain import ScienceArticleChain
-from rich.pretty import pprint
+from rich import print
 from agents.initial_analysis_agent import InitialAnalysisAgent
 from agents.web_search_agent import WebSearchAgent
 from agents.local_kb_agent import LocalKBAgent

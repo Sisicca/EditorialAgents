@@ -10,7 +10,7 @@ class ScienceArticleChain:
         self.initial_agent = InitialAnalysisAgent(config['initial_analysis'])
         
         logger.info("正在创建 UnifiedRetrievalAgent")
-        self.unified_retrieval_agent = UnifiedRetrievalAgent(config['web_search'], config['local_kb'])
+        self.unified_retrieval_agent = UnifiedRetrievalAgent(config['web_search'], config['local_kb'], config['unified_search'])
         
         logger.info("正在创建 ComprehensiveAnswerAgent")
         self.comprehensive_agent = ComprehensiveAnswerAgent(config['comprehensive_answer'])

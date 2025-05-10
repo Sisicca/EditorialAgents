@@ -7,6 +7,8 @@ web_search:
   api_key: "YOUR OPENAI_API_KEY"
   base_url: "YOUR OPENAI_BASE_URL"
   model: "model"
+  refine_model: "model"
+  update_model: "model"
   search_engine: "tavily"
   search_api_key: "YOUR TAVILY_API_KEY"
   web_num: 5
@@ -17,6 +19,8 @@ local_kb:
   api_key: "YOUR OPENAI_API_KEY"
   base_url: "YOUR OPENAI_BASE_URL"
   model: "model"
+  refine_model: "model"
+  update_model: "model"
   kb_path: ""
   embedding_model: ""
   reranker_model: ""
