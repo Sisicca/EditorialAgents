@@ -26,23 +26,9 @@ class ComprehensiveAnswerAgent:
         self.max_workers = config['max_workers']
         
         # 预构建处理链以提高性能
-        # try:
-        #     compose_template = PromptTemplate(
-        #         input_variables=['outline', 'title', 'summary', 'documents'],
-        #         template=PROMPTS['compose']
-        #     )
-        #     self.compose_chain = compose_template | self.llm | StrOutputParser()
-        # except Exception as e:
-        #     logger.error(f"预构建 Compose 处理链失败: {e}")
-        #     self.compose_chain = None
-            
         try:
-            compose_single_paragraph_template = PromptTemplate(
-                input_variables=['outline', 'title', 'summary', 'documents'],
-                template=PROMPTS['compose_single_paragraph']
-            )
-            self.compose_single_paragraph_chain = compose_single_paragraph_template | self.llm | StrOutputParser()
-
+            # 移除不再需要的compose_single_paragraph_chain
+            # 只保留用于非叶子节点的处理链
             compose_with_subparagraphs_template = PromptTemplate(
                 input_variables=['outline', 'title', 'summary', 'documents'],
                 template=PROMPTS['compose_with_subparagraphs']
@@ -56,7 +42,6 @@ class ComprehensiveAnswerAgent:
             self.compose_entire_article_chain = compose_entire_article_template | self.llm | StrOutputParser()               
         except Exception as e:
             logger.error(f"预构建 Compose 处理链失败: {e}")
-            self.compose_single_paragraph_chain = None
             self.compose_with_subparagraphs_chain = None
             self.compose_entire_article_chain = None
 
@@ -66,19 +51,23 @@ class ComprehensiveAnswerAgent:
             title = node['title']
             summary = node['summary']
             
-            # 判断是否为叶子节点
-            if not node.get('children'):
-                documents = node.get('web_docs_refined', []) + node.get('kb_docs_refined', [])
-                compose_chain = self.compose_single_paragraph_chain
-            else:
-                # 如果有子节点，假设子节点有 'content' 字段
-                documents = [child.get('content', '') for child in node.get('children', [])]
-                compose_chain = self.compose_with_subparagraphs_chain
-            
+            # 判断节点类型
             if node['level'] == 1:
+                # 顶层节点处理 - 生成完整文章
                 title = f"《{title}》"
                 summary = ""
                 compose_chain = self.compose_entire_article_chain
+                # 使用所有子节点的内容作为文档
+                documents = [child.get('content', '') for child in node.get('children', [])]
+            elif not node.get('children'):
+                # 叶子节点处理 - 跳过，因为内容已由迭代检索生成
+                # 直接使用现有content，如果没有则保持空字符串
+                logger.info(f"跳过叶子节点 '{title}' 的内容合成，使用迭代检索生成的内容。")
+                return
+            else:
+                # 非叶子节点处理 - 使用子节点内容合成
+                documents = [child.get('content', '') for child in node.get('children', [])]
+                compose_chain = self.compose_with_subparagraphs_chain
             
             # 调用Compose链生成内容
             content = compose_chain.invoke(

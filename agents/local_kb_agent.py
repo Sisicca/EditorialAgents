@@ -143,10 +143,30 @@ class LocalKBAgent:
             logger.error(f"生成假设性文档失败 (标题: {title}): {e}")
             return ""
     
-    def _search_docs(self, hypothetical_doc: str) -> List[str]:        
+    def _search_docs(self, query: str) -> List[dict]:        
         try:
-            kb_docs = self.retriever.invoke(hypothetical_doc)
-            return [doc.page_content for doc in kb_docs]
+            # 直接使用查询文本进行检索，不再依赖hypothetical_doc
+            kb_docs = self.retriever.invoke(query)
+            
+            # 返回包含必要信息的结构化结果，而不是仅仅返回内容字符串
+            structured_results = []
+            for doc in kb_docs:
+                # 提取并组织元数据
+                metadata = {}
+                if hasattr(doc, 'metadata'):
+                    metadata = doc.metadata.copy()
+                
+                # 创建结构化结果
+                structured_results.append({
+                    'content': doc.page_content,
+                    'metadata': metadata,
+                    'source': metadata.get('source', ''),
+                    'title': metadata.get('title', ''),
+                    'page': metadata.get('page', 0),
+                    'author': metadata.get('author', ''),
+                })
+                
+            return structured_results
         except Exception as e:
             logger.error(f"检索文档失败: {e}")
             return []
@@ -200,7 +220,7 @@ class LocalKBAgent:
             logger.info("开始顺序检索本地知识库...")
             for node in tqdm(leaf_nodes, desc="检索本地知识库"):
                 try:
-                    node['kb_docs'] = self._search_docs(hypothetical_doc=node.get('hypothetical_doc', ""))
+                    node['kb_docs'] = self._search_docs(query=node.get('hypothetical_doc', ""))
                     if not node['kb_docs']:
                         logger.warning(f"未检索到相关文档 (标题: {node['title']})")
                 except Exception as e:

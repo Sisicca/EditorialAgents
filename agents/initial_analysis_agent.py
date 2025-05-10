@@ -125,6 +125,22 @@ class ArticleOutline():
         traverse(self.outline)
         return leaf_nodes
     
+    def find_all_nodes(self):
+        """收集大纲中的所有节点
+        
+        Returns:
+            list: 所有节点的列表
+        """
+        all_nodes = []
+        
+        def traverse(node):
+            all_nodes.append(node)
+            for child in node.get('children', []):
+                traverse(child)
+        
+        traverse(self.outline)
+        return all_nodes
+    
     def find_max_level(self):
         leaf_nodes = self.find_leaf_nodes()
         return max([node['level'] for node in leaf_nodes])

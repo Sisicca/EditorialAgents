@@ -28,7 +28,7 @@ class WebSearchAgent:
         else:
             raise ImportError("'search_engine' must be 'tavily'.")
         
-    def _search_docs(self, title: str, summary: str) -> List[str]:
+    def _search_docs(self, title: str, summary: str) -> List[dict]:
         try:
             raw_results = self.search_client.search(
                 query=f"{title} {summary}",
@@ -36,8 +36,23 @@ class WebSearchAgent:
                 include_answer=False,
                 include_raw_content=True
             )
-            # 每篇最多不超过 max_length 字
-            return [result['raw_content'][:self.max_length] for result in raw_results['results'] if result.get('raw_content')]
+            
+            # 添加对raw_results的检查，确保它不是None
+            if raw_results is None:
+                logger.warning(f"搜索结果为None (标题: {title})")
+                return []
+            
+            # 返回包含必要信息的结构化结果，而不是仅仅返回内容字符串
+            structured_results = []
+            for result in raw_results.get('results', []):  # 使用get方法安全地访问'results'
+                if 'content' in result:
+                    structured_results.append({
+                        'content': result['content'][:self.max_length] if result['content'] else '',
+                        'url': result.get('url', ''),
+                        'title': result.get('title', ''),
+                        'score': result.get('score', 0),
+                    })
+            return structured_results
         except Exception as e:
             logger.error(f"搜索文档失败: {e}")
             return []
