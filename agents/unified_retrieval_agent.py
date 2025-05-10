@@ -129,12 +129,14 @@ class UnifiedRetrievalAgent:
         
         response = self._complete(initial_prompt)
         try:
+            # 处理可能的markdown格式，去除```json和```
+            response = self._clean_json_response(response)
             queries = json.loads(response)
             if not isinstance(queries, list):
                 logger.warning(f"查询不是列表格式: {response}")
                 queries = [node['title']]
-        except json.JSONDecodeError:
-            logger.warning(f"无法解析为JSON: {response}")
+        except json.JSONDecodeError as e:
+            logger.warning(f"无法解析为JSON: {response}，错误: {str(e)}")
             # 降级处理: 使用标题作为查询
             queries = [node['title']]
         
@@ -196,8 +198,9 @@ class UnifiedRetrievalAgent:
                 
             # 否则获取新查询
             try:
+                # 处理可能的markdown格式
+                response = self._clean_json_response(response)
                 # 尝试从可能包含额外文本的响应中提取JSON
-                response = response.strip()
                 start_idx = response.find('[')
                 end_idx = response.rfind(']') + 1
                 if start_idx >= 0 and end_idx > 0:
@@ -280,14 +283,16 @@ class UnifiedRetrievalAgent:
         retry_count = 0
         while retry_count < self.max_retries:
             try:
-                # 使用现有的web_search_agent执行搜索
-                raw_results = self.web_search_agent._search_docs(query)
+                # 使用现有的web_search_agent执行搜索，需要传递title和summary
+                # 由于这里我们只有query，我们将query作为title和summary
+                raw_results = self.web_search_agent._search_docs(title=query, summary=query)
                 
                 # 转换为Document格式
                 results = []
                 for result in raw_results:
                     doc = self._adapt_web_result(result, query)
-                    refined_content = self.web_search_agent._refine_doc(doc.content, query)
+                    # 同样需要传递title和summary
+                    refined_content = self.web_search_agent._refine_doc(doc.content, title=query, summary=query)
                     doc.content = refined_content
                     results.append(doc)
                 
@@ -314,14 +319,16 @@ class UnifiedRetrievalAgent:
         while retry_count < self.max_retries:
             try:
                 # 使用hypothetical文档方法进行本地检索
-                hypothetical_doc = self.local_kb_agent._generate_hypothetical_doc(query)
+                # 需要传递title和summary来生成hypothetical文档
+                hypothetical_doc = self.local_kb_agent._generate_hypothetical_doc(title=query, summary=query)
                 raw_results = self.local_kb_agent._search_docs(hypothetical_doc)
                 
                 # 转换为Document格式
                 results = []
                 for doc in raw_results:
                     document = self._adapt_kb_result(doc, query)
-                    refined_content = self.local_kb_agent._refine_doc(document.content, query)
+                    # 同样需要传递title和summary
+                    refined_content = self.local_kb_agent._refine_doc(document.content, title=query, summary=query)
                     document.content = refined_content
                     results.append(document)
                 
@@ -556,3 +563,25 @@ class UnifiedRetrievalAgent:
         except Exception as e:
             logger.error(f"调用LLM出错: {str(e)}")
             raise 
+
+    def _clean_json_response(self, response):
+        """清理可能含有markdown格式的JSON响应
+        
+        Args:
+            response: 原始响应字符串
+            
+        Returns:
+            str: 清理后的JSON字符串
+        """
+        # 移除可能的```json前缀和```后缀
+        response = response.strip()
+        if "```json" in response:
+            response = response.split("```json")[1]
+        elif "```" in response:
+            response = response.split("```")[1]
+        
+        # 移除末尾的```
+        if response.endswith("```"):
+            response = response[:-3]
+            
+        return response.strip() 

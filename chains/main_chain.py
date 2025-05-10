@@ -42,27 +42,37 @@ class ScienceArticleChain:
         
         # 收集所有引用
         for node in framework.find_all_nodes():
-            if 'references' in node:
+            if 'references' in node and isinstance(node['references'], list):
                 for ref in node['references']:
-                    all_refs[ref['key']] = ref
+                    if isinstance(ref, dict) and 'key' in ref:
+                        all_refs[ref['key']] = ref
         
+        # 如果没有收集到任何引用，返回空列表
+        if not all_refs:
+            logger.warning("未收集到任何引用")
+            return []
+            
         # 格式化参考文献列表
         formatted_refs = []
         for key, ref in sorted(all_refs.items()):
-            if ref['source'] == 'web':
-                formatted_refs.append(f"[{key}] {ref.get('title', '未知标题')}. {ref.get('url', '')}")
-            else:  # ref['source'] == 'kb'
-                file_name = ref.get('file', '')
-                if file_name:
-                    file_name = file_name.split('/')[-1] if '/' in file_name else file_name
-                
-                author = ref.get('author', '')
-                year = ref.get('year', '')
-                title = ref.get('title', '未知标题')
-                
-                if author and year:
-                    formatted_refs.append(f"[{key}] {author}. ({year}). {title}. {file_name}")
-                else:
-                    formatted_refs.append(f"[{key}] {title}. {file_name}")
+            try:
+                if ref['source'] == 'web':
+                    formatted_refs.append(f"[{key}] {ref.get('title', '未知标题')}. {ref.get('url', '')}")
+                else:  # ref['source'] == 'kb'
+                    file_name = ref.get('file', '')
+                    if file_name:
+                        file_name = file_name.split('/')[-1] if '/' in file_name else file_name
+                    
+                    author = ref.get('author', '')
+                    year = ref.get('year', '')
+                    title = ref.get('title', '未知标题')
+                    
+                    if author and year:
+                        formatted_refs.append(f"[{key}] {author}. ({year}). {title}. {file_name}")
+                    else:
+                        formatted_refs.append(f"[{key}] {title}. {file_name}")
+            except Exception as e:
+                logger.error(f"格式化引用 {key} 时出错: {str(e)}")
+                formatted_refs.append(f"[{key}] 引用格式化错误")
         
         return formatted_refs
