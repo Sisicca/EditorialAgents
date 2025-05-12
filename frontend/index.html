@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 编辑助手</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>创建新流程</h1>
+        <form id="createProcessForm">
+            <div>
+                <label for="topic">主题:</label>
+                <input type="text" id="topic" name="topic" required>
+            </div>
+            <div>
+                <label for="description">描述 (可选):</label>
+                <textarea id="description" name="description" rows="3"></textarea>
+            </div>
+            <div>
+                <label for="problem">问题 (可选):</label>
+                <textarea id="problem" name="problem" rows="3"></textarea>
+            </div>
+            <button type="submit">创建并生成大纲</button>
+        </form>
+
+        <h2>生成的大纲:</h2>
+        <div id="outlineDisplay"></div>
+        <button id="saveOutlineButton" style="display:none; margin-top: 15px;">保存当前大纲到服务器</button>
+        <div id="saveOutlineResponse" style="margin-top: 10px; padding: 10px; border-radius: 4px;"></div>
+
+        <div id="retrievalSection" style="display:none; margin-top: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 4px;">
+            <h3>开始迭代检索</h3>
+            <div>
+                <label for="useWebSearch">使用网络检索:</label>
+                <input type="checkbox" id="useWebSearch" name="useWebSearch" checked>
+            </div>
+            <div style="margin-top: 5px;">
+                <label for="useKbSearch">使用知识库检索:</label>
+                <input type="checkbox" id="useKbSearch" name="useKbSearch" checked>
+            </div>
+            <button id="startRetrievalButton" style="margin-top: 15px;">开始检索</button>
+            <div id="retrievalStatusResponse" style="margin-top: 10px; padding: 10px; border-radius: 4px;"></div>
+            <div id="leafNodesStatusContainer" style="margin-top: 15px;"></div>
+        </div>
+
+        <div id="compositionSection" style="margin-top: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 4px; display: none;">
+            <h3>生成全文</h3>
+            <button id="composeArticleButton">开始生成全文</button>
+            <div id="compositionStatusResponse" style="margin-top: 10px; padding: 10px; border-radius: 4px;"></div>
+            <div id="articleDisplayArea" style="margin-top: 15px;">
+                <h4>最终文章:</h4>
+                <div id="finalArticleContent"></div>
+            </div>
+        </div>
+
+        <h2>完整 API 响应:</h2>
+        <pre id="apiResponse"><code id="responseContent">等待操作...</code></pre>
+    </div>
+
+    <script>
+        let currentOutlineData = null; // 用于存储当前的大纲数据模型
+        let nodeIdCounter = 0;
+        let currentProcessId = null; // 新增: 存储当前流程ID
+        let retrievalStatusInterval = null; // 新增: 轮询定时器ID
+        let articleStatusInterval = null; // 新增: 文章状态轮询定时器ID
+
+        function generateNodeId() {
+            nodeIdCounter++;
+            return `node-${nodeIdCounter}`;
+        }
+
+        // 递归地为大纲节点添加唯一ID（如果还没有的话）
+        function assignIdsToOutline(node) {
+            if (!node.id) {
+                node.id = generateNodeId();
+            }
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(assignIdsToOutline);
+            }
+        }
+
+        function updateOutlineData(nodeId, fieldType, newValue) {
+            if (!currentOutlineData) return;
+
+            function findAndUpdateNode(node) {
+                if (node.id === nodeId) {
+                    node[fieldType] = newValue;
+                    return true;
+                }
+                if (node.children && node.children.length > 0) {
+                    for (const child of node.children) {
+                        if (findAndUpdateNode(child)) return true;
+                    }
+                }
+                return false;
+            }
+            findAndUpdateNode(currentOutlineData);
+            // console.log("Updated outline data:", JSON.stringify(currentOutlineData, null, 2)); // 用于调试
+        }
+
+        async function saveOutlineToServer() {
+            if (!currentProcessId || !currentOutlineData) {
+                alert("没有有效的流程ID或大纲数据可保存。");
+                return;
+            }
+
+            const saveButton = document.getElementById('saveOutlineButton');
+            const saveResponseDiv = document.getElementById('saveOutlineResponse');
+
+            saveButton.disabled = true;
+            saveResponseDiv.textContent = '正在保存大纲...';
+            saveResponseDiv.className = ''; // Reset classes
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/process/${currentProcessId}/outline`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ outline_dict: currentOutlineData }), 
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    saveResponseDiv.textContent = `大纲保存成功: ${result.message}`;
+                    saveResponseDiv.classList.add('success-message');
+                } else {
+                    saveResponseDiv.textContent = `保存失败: ${result.detail || JSON.stringify(result)}`;
+                    saveResponseDiv.classList.add('error-message');
+                }
+            } catch (error) {
+                console.error('保存大纲请求失败:', error);
+                saveResponseDiv.textContent = '保存大纲请求失败: ' + error.message;
+                saveResponseDiv.classList.add('error-message');
+            } finally {
+                saveButton.disabled = false;
+            }
+        }
+
+        // 新增: 获取并展示检索状态的函数
+        async function fetchRetrievalStatus() {
+            if (!currentProcessId) {
+                if (retrievalStatusInterval) clearInterval(retrievalStatusInterval);
+                return;
+            }
+            const retrievalStatusDiv = document.getElementById('retrievalStatusResponse');
+            const leafNodesContainer = document.getElementById('leafNodesStatusContainer');
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/process/${currentProcessId}/retrieval/status`);
+                const result = await response.json();
+
+                if (response.ok) {
+                    const statusData = result.retrieval_status;
+                    // 更新整体状态显示
+                    retrievalStatusDiv.innerHTML = `<strong>整体状态:</strong> ${statusData.overall_status_message} <br> 
+                                                  <strong>进度:</strong> ${statusData.completed_leaf_nodes} / ${statusData.total_leaf_nodes} 叶节点完成`;
+                    if (statusData.error_message) {
+                        retrievalStatusDiv.innerHTML += `<br><strong class="error-message">整体错误: ${statusData.error_message}</strong>`;
+                    }
+
+                    // 清空并重新渲染叶节点状态
+                    leafNodesContainer.innerHTML = ''; 
+                    for (const nodeId in statusData.leaf_nodes_status) {
+                        renderLeafNodeStatus(statusData.leaf_nodes_status[nodeId], leafNodesContainer);
+                    }
+
+                    // 如果检索完成或出错，停止轮询
+                    if (statusData.overall_status_message === "Retrieval Completed" || 
+                        statusData.overall_status_message === "Retrieval Completed with Errors" || 
+                        statusData.error_message) {
+                        if (retrievalStatusInterval) clearInterval(retrievalStatusInterval);
+                        retrievalStatusInterval = null;
+                        document.getElementById('startRetrievalButton').disabled = false; // 可以重新开始或不同操作
+                        retrievalStatusDiv.innerHTML += "<br><strong>轮询已停止。</strong>";
+
+                        // 检查是否可以启用合成按钮
+                        const composeButton = document.getElementById('composeArticleButton');
+                        if (statusData.overall_status_message === "Retrieval Completed" || statusData.overall_status_message === "Retrieval Completed with Errors") {
+                            document.getElementById('compositionSection').style.display = 'block';
+                            composeButton.disabled = false;
+                            if (!composeButton.getAttribute('listener')) {
+                                composeButton.addEventListener('click', composeArticle);
+                                composeButton.setAttribute('listener', 'true');
+                            }
+                        } else {
+                             document.getElementById('compositionSection').style.display = 'none';
+                        }
+                    }
+                } else {
+                    retrievalStatusDiv.innerHTML += `<br><span class="error-message">获取状态失败: ${result.detail || '未知错误'}</span>`;
+                    if (retrievalStatusInterval) clearInterval(retrievalStatusInterval); // 出错也停止
+                    retrievalStatusInterval = null;
+                }
+            } catch (error) {
+                console.error('获取检索状态请求失败:', error);
+                retrievalStatusDiv.innerHTML += `<br><span class="error-message">获取状态请求失败: ${error.message}</span>`;
+                if (retrievalStatusInterval) clearInterval(retrievalStatusInterval); // 出错也停止
+                retrievalStatusInterval = null;
+            }
+        }
+
+        // 新增: 渲染单个叶节点状态的函数 (骨架)
+        function renderLeafNodeStatus(nodeData, container) {
+            const nodeDiv = document.createElement('div');
+            nodeDiv.classList.add('leaf-node-status-card');
+            nodeDiv.setAttribute('data-node-id', nodeData.node_id);
+
+            let content = `<h4>${nodeData.title || nodeData.node_id}</h4>`;
+            content += `<p><strong>状态:</strong> ${nodeData.status_message || 'N/A'}</p>`;
+            if (nodeData.iteration_progress) {
+                content += `<p><strong>迭代:</strong> ${nodeData.iteration_progress}</p>`;
+            }
+            if (nodeData.current_query) {
+                // 将逗号分隔的查询字符串转换为列表展示
+                content += `<h5>当前查询:</h5>`;
+                const queryList = document.createElement('ul');
+                queryList.classList.add('query-list');
+                const queries = nodeData.current_query.split(', '); // 假设以 ', ' 分隔
+                queries.forEach(q => {
+                    if (q.trim()) { // 避免空字符串
+                        const listItem = document.createElement('li');
+                        listItem.textContent = q.trim();
+                        queryList.appendChild(listItem);
+                    }
+                });
+                 content += queryList.outerHTML;
+                // content += `<p><strong>当前查询:</strong> <pre>${nodeData.current_query}</pre></p>`; // 旧的展示方式
+            }
+            if (nodeData.retrieved_docs_preview && nodeData.retrieved_docs_preview.length > 0) {
+                const docsContainerId = `docs-${nodeData.node_id}`;
+                const docsToggleId = `toggle-${docsContainerId}`;
+                
+                content += `<div class="collapsible-container">`;
+                content += `<button id="${docsToggleId}" class="toggle-button" data-target="${docsContainerId}">显示/隐藏检索到的文档 (${nodeData.retrieved_docs_preview.length})</button>`;
+                content += `<div id="${docsContainerId}" class="collapsible-content hidden">`; // 默认隐藏
+                content += `<h5>检索到的文档 (当前轮次):</h5>`;
+                const docsList = document.createElement('ul');
+                docsList.classList.add('retrieved-docs-list');
+                nodeData.retrieved_docs_preview.forEach(doc => {
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `<strong>${doc.title || doc.citation_key}</strong> (来源: ${doc.source}) <br>ID: ${doc.id}`;
+                    docsList.appendChild(listItem);
+                });
+                content += docsList.outerHTML;
+                content += `</div></div>`; // 关闭 collapsible-content 和 collapsible-container
+            }
+            if (nodeData.content_preview) {
+                content += `<h5>内容预览 (当前轮次):</h5><div class="content-preview">${nodeData.content_preview.replace(/\n/g, '<br>')}</div>`;
+            }
+            if (nodeData.error_message) {
+                content += `<p class="error-message"><strong>节点错误:</strong> ${nodeData.error_message}</p>`;
+            }
+             if (nodeData.is_completed) {
+                content += `<p class="success-message"><strong>此节点处理完成!</strong></p>`;
+            }
+
+            nodeDiv.innerHTML = content;
+            container.appendChild(nodeDiv);
+        }
+
+        // 事件委托处理折叠按钮点击
+        document.getElementById('leafNodesStatusContainer').addEventListener('click', function(event) {
+            if (event.target.classList.contains('toggle-button')) {
+                const targetId = event.target.getAttribute('data-target');
+                const targetElement = document.getElementById(targetId);
+                if (targetElement) {
+                    targetElement.classList.toggle('hidden');
+                }
+            }
+        });
+
+        async function startIterativeRetrieval() {
+            if (!currentProcessId) {
+                alert("没有有效的流程ID来开始检索。");
+                return;
+            }
+
+            const useWeb = document.getElementById('useWebSearch').checked;
+            const useKb = document.getElementById('useKbSearch').checked;
+            const startButton = document.getElementById('startRetrievalButton');
+            const retrievalStatusDiv = document.getElementById('retrievalStatusResponse');
+
+            startButton.disabled = true;
+            retrievalStatusDiv.textContent = '正在启动检索流程...';
+            retrievalStatusDiv.className = ''; // Reset classes
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/process/${currentProcessId}/retrieval/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        use_web: useWeb, 
+                        use_kb: useKb 
+                    }), 
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    retrievalStatusDiv.innerHTML = `检索流程已启动。<br><strong>消息:</strong> ${result.message}<br><strong>初始状态:</strong> <pre>${JSON.stringify(result.initial_status, null, 2)}</pre>`;
+                    retrievalStatusDiv.classList.add('success-message');
+                    
+                    // 启动轮询
+                    if (retrievalStatusInterval) clearInterval(retrievalStatusInterval); // 清除旧的（如果存在）
+                    fetchRetrievalStatus(); // 立即获取一次状态
+                    retrievalStatusInterval = setInterval(fetchRetrievalStatus, 3000); // 每3秒轮询一次
+
+                } else {
+                    retrievalStatusDiv.textContent = `启动检索失败: ${result.detail || JSON.stringify(result)}`;
+                    retrievalStatusDiv.classList.add('error-message');
+                }
+            } catch (error) {
+                console.error('启动检索请求失败:', error);
+                retrievalStatusDiv.textContent = '启动检索请求失败: ' + error.message;
+                retrievalStatusDiv.classList.add('error-message');
+            } finally {
+                startButton.disabled = false;
+            }
+        }
+
+        function displayOutline(outline, containerElement) {
+            containerElement.innerHTML = ''; 
+            nodeIdCounter = 0; // 重置ID计数器以便每次生成大纲时ID都是新的（或者从outline数据中持久化）
+            assignIdsToOutline(outline); // 确保所有节点都有ID
+            currentOutlineData = outline; // 存储大纲数据
+
+            if (!outline || typeof outline !== 'object') {
+                containerElement.textContent = '无效的大纲数据。';
+                return;
+            }
+
+            const overallTitle = document.createElement('h3');
+            overallTitle.textContent = outline.title || '未命名大纲';
+            overallTitle.setAttribute('contenteditable', 'true');
+            overallTitle.setAttribute('data-node-id', outline.id);
+            overallTitle.setAttribute('data-field-type', 'title');
+            overallTitle.addEventListener('blur', (e) => {
+                updateOutlineData(outline.id, 'title', e.target.textContent);
+            });
+            containerElement.appendChild(overallTitle);
+
+            if (outline.summary) {
+                const overallSummary = document.createElement('p');
+                overallSummary.innerHTML = `<strong>总结:</strong> <span contenteditable="true" data-node-id="${outline.id}" data-field-type="summary">${outline.summary.replace(/\n/g, '<br>')}</span>`;
+                overallSummary.querySelector('span').addEventListener('blur', (e) => {
+                     // innerText or textContent for spans to avoid HTML issues from replace
+                    updateOutlineData(outline.id, 'summary', e.target.innerText.replace(/\n\n/g, '\n')); // Handle potential multiple newlines from contenteditable
+                });
+                containerElement.appendChild(overallSummary);
+            }
+
+            // 为顶级大纲添加 "添加章节" 按钮
+            const addTopLevelSectionButton = document.createElement('button');
+            addTopLevelSectionButton.textContent = '＋ 添加主章节';
+            addTopLevelSectionButton.classList.add('action-button', 'add-button');
+            addTopLevelSectionButton.addEventListener('click', () => addSection(outline.id, true)); // true表示是顶级章节
+            containerElement.appendChild(addTopLevelSectionButton);
+
+            function createSectionElement(section, parentNode) { // 传入parentNode用于删除
+                const sectionDiv = document.createElement('div');
+                sectionDiv.classList.add('outline-section');
+                sectionDiv.style.marginLeft = ((section.level || 1) - 1) * 20 + 'px';
+
+                const title = document.createElement('h4');
+                title.textContent = section.title || '未命名章节';
+                title.setAttribute('contenteditable', 'true');
+                title.setAttribute('data-node-id', section.id);
+                title.setAttribute('data-field-type', 'title');
+                title.addEventListener('blur', (e) => {
+                    updateOutlineData(section.id, 'title', e.target.textContent);
+                });
+                sectionDiv.appendChild(title);
+
+                if (section.summary) {
+                    const summary = document.createElement('p');
+                    summary.innerHTML = `<em contenteditable="true" data-node-id="${section.id}" data-field-type="summary">${section.summary.replace(/\n/g, '<br>')}</em>`;
+                    summary.querySelector('em').addEventListener('blur', (e) => {
+                        updateOutlineData(section.id, 'summary', e.target.innerText.replace(/\n\n/g, '\n'));
+                    });
+                    sectionDiv.appendChild(summary);
+                }
+
+                // 添加操作按钮：添加子章节、删除本章节
+                const controlsDiv = document.createElement('div');
+                controlsDiv.classList.add('section-controls');
+
+                const addButton = document.createElement('button');
+                addButton.textContent = '＋ 添加子章节';
+                addButton.classList.add('action-button', 'add-button');
+                addButton.addEventListener('click', () => addSection(section.id));
+                controlsDiv.appendChild(addButton);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '－ 删除此章节';
+                deleteButton.classList.add('action-button', 'delete-button');
+                deleteButton.addEventListener('click', () => deleteSection(section.id, parentNode));
+                controlsDiv.appendChild(deleteButton);
+
+                sectionDiv.appendChild(controlsDiv);
+
+                if (section.children && section.children.length > 0) { 
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.classList.add('subsections-container');
+                    section.children.forEach(child => {
+                        childrenContainer.appendChild(createSectionElement(child, section)); // 传递当前section作为parentNode
+                    });
+                    sectionDiv.appendChild(childrenContainer);
+                }
+                return sectionDiv;
+            }
+
+            if (outline.children && outline.children.length > 0) { 
+                outline.children.forEach(section => {
+                    containerElement.appendChild(createSectionElement(section, outline)); // 传递顶层outline作为parentNode
+                });
+            } else {
+                const noSectionsMsg = document.createElement('p');
+                noSectionsMsg.textContent = '此大纲没有主要章节。';
+                containerElement.appendChild(noSectionsMsg);
+            }
+        }
+
+        function addSection(parentId, isTopLevel = false) {
+            if (!currentOutlineData) return;
+            const newSectionTitle = prompt("请输入新章节的标题:", "新章节");
+            if (newSectionTitle === null) return; // 用户取消
+
+            const newSectionSummary = prompt("请输入新章节的摘要 (可选):", "");
+
+            const newSection = {
+                id: generateNodeId(),
+                title: newSectionTitle,
+                summary: newSectionSummary || "",
+                level: 0, // 将在findAndAdd中设置
+                children: []
+            };
+
+            let parentNodeRef = null;
+
+            function findAndAdd(node, currentLevel) {
+                if (node.id === parentId) {
+                    newSection.level = currentLevel + 1;
+                    if (!node.children) {
+                        node.children = [];
+                    }
+                    node.children.push(newSection);
+                    parentNodeRef = node; // 引用父节点
+                    return true;
+                }
+                if (node.children && node.children.length > 0) {
+                    for (const child of node.children) {
+                        if (findAndAdd(child, currentLevel + 1)) return true;
+                    }
+                }
+                return false;
+            }
+            
+            if (isTopLevel && currentOutlineData.id === parentId) { // 添加到根节点的children
+                newSection.level = (currentOutlineData.level || 0) + 1; // 通常顶级章节level是2，如果根是1
+                 if (!currentOutlineData.children) {
+                    currentOutlineData.children = [];
+                }
+                currentOutlineData.children.push(newSection);
+                parentNodeRef = currentOutlineData;
+            } else {
+                findAndAdd(currentOutlineData, currentOutlineData.level || 0); 
+            }
+
+            if (parentNodeRef) { // 确保找到了父节点并添加成功
+                displayOutline(currentOutlineData, document.getElementById('outlineDisplay'));
+            } else {
+                alert("错误：未能找到父章节来添加新章节。");
+            }
+        }
+
+        function deleteSection(sectionId, parentNode) {
+            if (!currentOutlineData) return;
+            if (!confirm("确定要删除此章节及其所有子章节吗？此操作不可撤销。")) {
+                return;
+            }
+
+            let foundAndDeleted = false;
+
+            function findAndDelete(node, parent) {
+                if (node.id === sectionId) {
+                    // Should not happen for root node deletion via this button, but as a safeguard:
+                    if (!parent) { 
+                        alert("错误：无法直接删除根大纲节点。"); 
+                        return true; // Pretend it was handled to stop recursion
+                    }
+                    parent.children = parent.children.filter(child => child.id !== sectionId);
+                    foundAndDeleted = true;
+                    return true; // Found and processed
+                }
+                if (node.children && node.children.length > 0) {
+                    for (const child of node.children) {
+                        // Pass current node as parent for the next level of recursion
+                        if (findAndDelete(child, node)) return true; 
+                    }
+                }
+                return false;
+            }
+            
+            // Check if we are trying to delete a top-level section from the root
+            if (parentNode && parentNode.id === currentOutlineData.id) {
+                currentOutlineData.children = currentOutlineData.children.filter(child => child.id !== sectionId);
+                foundAndDeleted = true;
+            } else {
+                 findAndDelete(currentOutlineData, null); // Start search from root, parent is initially null
+            }
+
+            if (foundAndDeleted) {
+                displayOutline(currentOutlineData, document.getElementById('outlineDisplay'));
+            } else {
+                // This case should ideally not happen if delete buttons are only on valid sections
+                alert("错误：未能找到要删除的章节。"); 
+            }
+        }
+
+        // 新增：调用生成文章API
+        async function composeArticle() {
+            if (!currentProcessId) {
+                alert("没有有效的流程ID来生成文章。");
+                return;
+            }
+            const composeButton = document.getElementById('composeArticleButton');
+            const composeStatusDiv = document.getElementById('compositionStatusResponse');
+            const articleContentDiv = document.getElementById('finalArticleContent');
+
+            composeButton.disabled = true;
+            composeStatusDiv.textContent = '正在启动文章生成...';
+            composeStatusDiv.className = '';
+            articleContentDiv.innerHTML = ''; // 清空旧文章
+            if (articleStatusInterval) clearInterval(articleStatusInterval); // 清除旧轮询
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/process/${currentProcessId}/compose/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    composeStatusDiv.textContent = `文章生成已启动: ${result.message}`;
+                    composeStatusDiv.classList.add('success-message');
+                    // 启动文章状态轮询
+                    fetchArticleStatus(); // 立即获取一次
+                    articleStatusInterval = setInterval(fetchArticleStatus, 3000); // 每3秒轮询
+                } else {
+                    composeStatusDiv.textContent = `启动生成失败: ${result.detail || JSON.stringify(result)}`;
+                    composeStatusDiv.classList.add('error-message');
+                    composeButton.disabled = false; // 允许重试
+                }
+            } catch (error) {
+                console.error('启动文章生成请求失败:', error);
+                composeStatusDiv.textContent = '启动文章生成请求失败: ' + error.message;
+                composeStatusDiv.classList.add('error-message');
+                composeButton.disabled = false; // 允许重试
+            }
+        }
+
+        // 新增: 获取文章状态和内容
+        async function fetchArticleStatus() {
+            if (!currentProcessId) {
+                if (articleStatusInterval) clearInterval(articleStatusInterval);
+                return;
+            }
+            const composeStatusDiv = document.getElementById('compositionStatusResponse');
+            const articleContentDiv = document.getElementById('finalArticleContent');
+            const composeButton = document.getElementById('composeArticleButton');
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/process/${currentProcessId}/article`);
+                const result = await response.json();
+
+                if (response.ok) {
+                    composeStatusDiv.textContent = `生成状态: ${result.composition_status}`;
+                    if (result.composition_status === 'Completed') {
+                        articleContentDiv.innerHTML = result.article_content ? result.article_content.replace(/\n/g, '<br>') : '未能获取文章内容。';
+                        if (articleStatusInterval) clearInterval(articleStatusInterval);
+                        articleStatusInterval = null;
+                        composeButton.disabled = true; // 完成后禁用
+                        composeStatusDiv.classList.add('success-message');
+                    } else if (result.composition_status === 'Error') {
+                        articleContentDiv.textContent = '文章生成过程中发生错误。';
+                        if (articleStatusInterval) clearInterval(articleStatusInterval);
+                        articleStatusInterval = null;
+                        composeButton.disabled = false; // 允许重试
+                        composeStatusDiv.classList.add('error-message');
+                    } else {
+                         // In Progress or Not Started - continue polling
+                        composeStatusDiv.classList.remove('success-message', 'error-message');
+                    }
+                } else {
+                    composeStatusDiv.textContent = `获取文章状态失败: ${result.detail || '未知错误'}`;
+                    composeStatusDiv.classList.add('error-message');
+                    if (articleStatusInterval) clearInterval(articleStatusInterval);
+                    articleStatusInterval = null;
+                     composeButton.disabled = false; // 允许重试
+                }
+            } catch (error) {
+                 console.error('获取文章状态请求失败:', error);
+                 composeStatusDiv.textContent = '获取文章状态请求失败: ' + error.message;
+                 composeStatusDiv.classList.add('error-message');
+                 if (articleStatusInterval) clearInterval(articleStatusInterval);
+                 articleStatusInterval = null;
+                  composeButton.disabled = false; // 允许重试
+            }
+        }
+
+        document.getElementById('createProcessForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const topic = document.getElementById('topic').value;
+            const description = document.getElementById('description').value;
+            const problem = document.getElementById('problem').value;
+            const responseContentEl = document.getElementById('responseContent');
+            const apiResponseContainer = document.getElementById('apiResponse');
+            const outlineDisplayContainer = document.getElementById('outlineDisplay');
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            const saveOutlineButton = document.getElementById('saveOutlineButton');
+            const saveOutlineResponseDiv = document.getElementById('saveOutlineResponse');
+            const retrievalSectionDiv = document.getElementById('retrievalSection');
+            const retrievalStatusResponseDiv = document.getElementById('retrievalStatusResponse');
+            const leafNodesStatusContainer = document.getElementById('leafNodesStatusContainer'); // 获取新容器
+            const compositionSectionDiv = document.getElementById('compositionSection'); // 获取新区域
+            const finalArticleContentDiv = document.getElementById('finalArticleContent'); // 获取文章内容区域
+
+            responseContentEl.textContent = '正在创建流程...';
+            outlineDisplayContainer.innerHTML = '';
+            submitButton.disabled = true;
+            saveOutlineButton.style.display = 'none';
+            saveOutlineResponseDiv.innerHTML = '';
+            retrievalSectionDiv.style.display = 'none';
+            retrievalStatusResponseDiv.innerHTML = '';
+            leafNodesStatusContainer.innerHTML = ''; // 清空叶节点状态容器
+            compositionSectionDiv.style.display = 'none'; // 隐藏文章区域
+            finalArticleContentDiv.innerHTML = ''; // 清空文章内容
+            currentProcessId = null;
+            if (retrievalStatusInterval) { // 清除可能存在的旧轮询
+                clearInterval(retrievalStatusInterval);
+                retrievalStatusInterval = null;
+            }
+            if (articleStatusInterval) { // 清除旧的文章轮询
+                clearInterval(articleStatusInterval);
+                articleStatusInterval = null;
+            }
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/process/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        topic: topic,
+                        description: description,
+                        problem: problem,
+                    }),
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    responseContentEl.textContent = JSON.stringify(result, null, 2); 
+                    apiResponseContainer.classList.remove('error');
+                    apiResponseContainer.classList.add('success');
+                    
+                    if (result.initial_outline) {
+                        currentProcessId = result.process_id;
+                        currentOutlineData = JSON.parse(JSON.stringify(result.initial_outline)); 
+                        displayOutline(currentOutlineData, outlineDisplayContainer);
+                        saveOutlineButton.style.display = 'block';
+                        if (!saveOutlineButton.getAttribute('listener')) {
+                             saveOutlineButton.addEventListener('click', saveOutlineToServer);
+                             saveOutlineButton.setAttribute('listener', 'true');
+                        }
+                        retrievalSectionDiv.style.display = 'block';
+                        const startRetrievalBtn = document.getElementById('startRetrievalButton');
+                        if (!startRetrievalBtn.getAttribute('listener')) {
+                            startRetrievalBtn.addEventListener('click', startIterativeRetrieval);
+                            startRetrievalBtn.setAttribute('listener', 'true');
+                        }
+                    } else {
+                        currentOutlineData = null;
+                        outlineDisplayContainer.textContent = '未能从响应中获取大纲。';
+                    }
+                } else {
+                    responseContentEl.textContent = `错误 ${response.status}: ${result.detail || JSON.stringify(result, null, 2)}`;
+                    apiResponseContainer.classList.remove('success');
+                    apiResponseContainer.classList.add('error');
+                    outlineDisplayContainer.textContent = '由于错误，无法加载大纲。';
+                    currentOutlineData = null;
+                    currentProcessId = null;
+                }
+            } catch (error) {
+                console.error('请求失败:', error);
+                responseContentEl.textContent = '请求失败: ' + error.message;
+                apiResponseContainer.classList.remove('success');
+                apiResponseContainer.classList.add('error');
+                outlineDisplayContainer.textContent = '由于请求失败，无法加载大纲。';
+                currentOutlineData = null;
+                currentProcessId = null;
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html> 
