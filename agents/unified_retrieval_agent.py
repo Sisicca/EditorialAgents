@@ -148,7 +148,7 @@ class UnifiedRetrievalAgent:
         node_display_id = self._get_node_display_id(node)
         logger.info(f"PID-{process_id} Node-{node_display_id}: 开始处理")
         status_manager.update_leaf_node_status(process_id, node_display_id, LeafNodeStatusUpdate(status_message="Initializing node processing..."))
-
+        
         # 初始化节点的检索历史和内容
         node['retrieval_history'] = []
         node['content'] = ""
@@ -373,7 +373,7 @@ class UnifiedRetrievalAgent:
                         all_results.extend(result)
                 except Exception as e:
                     logger.error(f"PID-{process_id} Node-{node_display_id}: 网络搜索查询失败: {str(e)}")
-            
+        
             # 收集知识库搜索结果
             for future in as_completed(kb_search_futures):
                 try:

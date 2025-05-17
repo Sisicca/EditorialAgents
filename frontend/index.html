@@ -326,7 +326,6 @@
 
         function displayOutline(outline, containerElement) {
             containerElement.innerHTML = ''; 
-            nodeIdCounter = 0; // 重置ID计数器以便每次生成大纲时ID都是新的（或者从outline数据中持久化）
             assignIdsToOutline(outline); // 确保所有节点都有ID
             currentOutlineData = outline; // 存储大纲数据
 
