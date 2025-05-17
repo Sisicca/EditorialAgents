@@ -161,20 +161,97 @@ class UnifiedRetrievalAgent:
             title=node['title'],
             summary=node['summary']
         )
-        
+
         response = self._complete(initial_prompt, process_id, node_display_id)
         try:
             # 处理可能的markdown格式，去除```json和```
             response = self._clean_json_response(response)
+            
+            # 尝试提取有效的JSON数组
+            # 如果response不是以[开始，]结束的有效JSON，尝试从文本中提取数组部分
+            if not (response.strip().startswith('[') and response.strip().endswith(']')):
+                logger.warning(f"PID-{process_id} Node-{node_display_id}: 初始查询响应不是有效的JSON数组格式，尝试提取")
+                start_idx = response.find('[')
+                end_idx = response.rfind(']') + 1
+                if start_idx >= 0 and end_idx > 0:
+                    json_str = response[start_idx:end_idx]
+                    response = json_str
+                else:
+                    # 如果无法提取数组，创建一个只包含节点标题的单项数组
+                    logger.warning(f"PID-{process_id} Node-{node_display_id}: 无法从响应中提取JSON数组，使用节点标题作为查询")
+                    fallback_query = json.dumps([node['title']])
+                    response = fallback_query
+            
+            # 尝试解析JSON
             queries = json.loads(response)
+            
+            # 验证查询结果是否为列表
             if not isinstance(queries, list):
                 logger.warning(f"PID-{process_id} Node-{node_display_id}: 查询不是列表格式: {response}")
                 queries = [node['title']]
+            else:
+                # 确保所有的查询都是字符串类型
+                validated_queries = []
+                for i, query in enumerate(queries):
+                    if not isinstance(query, str):
+                        logger.warning(f"PID-{process_id} Node-{node_display_id}: 第{i+1}个查询不是字符串类型，尝试转换")
+                        if isinstance(query, dict):
+                            # 可能返回了包含多个字段的对象，如 {"query": "实际查询"} 
+                            # 尝试提取常见字段
+                            for key in ['query', 'q', 'text', 'content']:
+                                if key in query and isinstance(query[key], str):
+                                    validated_queries.append(query[key])
+                                    break
+                            else:
+                                # 如果找不到有效字段，使用整个对象的字符串表示
+                                validated_queries.append(str(query))
+                        else:
+                            # 对于其他类型，转为字符串
+                            validated_queries.append(str(query) if query is not None else node['title'])
+                    else:
+                        validated_queries.append(query)
+                
+                # 更新查询列表
+                queries = validated_queries
+                
+            # 确保我们至少有一个查询
+            if not queries:
+                logger.warning(f"PID-{process_id} Node-{node_display_id}: 生成的查询列表为空，使用节点标题作为查询")
+                queries = [node['title']]
+            
         except json.JSONDecodeError as e:
             logger.warning(f"PID-{process_id} Node-{node_display_id}: 无法解析初始查询JSON: {response}，错误: {str(e)}")
-            status_manager.update_leaf_node_status(process_id, node_display_id, LeafNodeStatusUpdate(error_message=f"Failed to parse initial queries: {str(e)}", is_completed=True))
-            return # Stop processing this node
-        
+            # 使用更可靠的方式提取可能的查询文本
+            # 如果响应文本包含明显的查询，以换行或逗号分割，则尝试提取
+            if '\n' in response:
+                # 尝试按行分割
+                lines = [line.strip() for line in response.split('\n') if line.strip()]
+                if lines:
+                    logger.info(f"PID-{process_id} Node-{node_display_id}: 从文本中提取到{len(lines)}个可能的查询")
+                    queries = lines
+                else:
+                    queries = [node['title']]
+            else:
+                # 无法解析，使用节点标题作为查询
+                logger.warning(f"PID-{process_id} Node-{node_display_id}: 无法从响应中提取查询，使用节点标题作为查询")
+                queries = [node['title']]
+            
+            status_manager.update_leaf_node_status(process_id, node_display_id, 
+                LeafNodeStatusUpdate(
+                    status_message="Initial query parsing issue, using fallback query.", 
+                    is_completed=False
+                )
+            )
+        except Exception as e:
+            logger.error(f"PID-{process_id} Node-{node_display_id}: 处理初始查询时发生未知错误: {str(e)}")
+            queries = [node['title']]
+            status_manager.update_leaf_node_status(process_id, node_display_id, 
+                LeafNodeStatusUpdate(
+                    error_message=f"Error processing initial queries: {str(e)}", 
+                    is_completed=False
+                )
+            )
+
         all_used_queries = queries.copy()
         iteration = 0
         
@@ -218,15 +295,44 @@ class UnifiedRetrievalAgent:
             current_doc_previews = []
             if new_results: # 只在有新结果时更新文档预览
                 for doc in new_results:
-                    current_doc_previews.append(DocumentPreview(
-                        id=doc.id,
-                        citation_key=doc.citation_key,
-                        title=doc.metadata.get('title', '未知标题'),
-                        source=doc.source
-                    ))
-                status_manager.update_leaf_node_status(process_id, node_display_id,
-                    LeafNodeStatusUpdate(retrieved_docs_preview=current_doc_previews)
-                )
+                    # 添加类型检查和转换，确保DocumentPreview构造函数接收到的所有参数都是正确的类型
+                    doc_id = str(doc.id) if doc.id is not None else str(uuid.uuid4())
+                    citation_key = str(doc.citation_key) if doc.citation_key is not None else f"doc-{str(uuid.uuid4())[:8]}"
+                    
+                    # 确保title是字符串
+                    title = doc.metadata.get('title', '未知标题')
+                    if not isinstance(title, str):
+                        logger.warning(f"PID-{process_id} Node-{node_display_id}: 文档标题不是字符串类型: {type(title)}")
+                        title = str(title) if title is not None else '未知标题'
+                    
+                    # 确保source是字符串
+                    source = doc.source
+                    if not isinstance(source, str):
+                        logger.warning(f"PID-{process_id} Node-{node_display_id}: 文档来源不是字符串类型: {type(source)}")
+                        source = str(source) if source is not None else 'unknown'
+                    
+                    try:
+                        preview = DocumentPreview(
+                            id=doc_id,
+                            citation_key=citation_key,
+                            title=title,
+                            source=source
+                        )
+                        current_doc_previews.append(preview)
+                    except Exception as e:
+                        logger.error(f"PID-{process_id} Node-{node_display_id}: 创建DocumentPreview失败: {str(e)}")
+                        # 跳过这个文档，不添加到预览列表中
+                        continue
+                
+                # 检查预览列表是否为空
+                if current_doc_previews:
+                    try:
+                        status_manager.update_leaf_node_status(process_id, node_display_id,
+                            LeafNodeStatusUpdate(retrieved_docs_preview=current_doc_previews)
+                        )
+                    except Exception as e:
+                        logger.error(f"PID-{process_id} Node-{node_display_id}: 更新检索文档预览失败: {str(e)}")
+                        # 如果更新失败，继续执行但不更新文档预览
             
             # 格式化检索结果用于提示
             formatted_results = self._format_retrieval_results_for_prompt(new_results)
@@ -286,26 +392,67 @@ class UnifiedRetrievalAgent:
             try:
                 # 处理可能的markdown格式
                 response = self._clean_json_response(response)
+                
+                # 准备默认空查询列表，以防不能提取到有效查询
+                new_queries = []
+                
                 # 尝试从可能包含额外文本的响应中提取JSON
                 start_idx = response.find('[')
                 end_idx = response.rfind(']') + 1
                 if start_idx >= 0 and end_idx > 0:
                     json_str = response[start_idx:end_idx]
-                    queries = json.loads(json_str)
-                    if isinstance(queries, list):
-                        all_used_queries.extend(queries)
+                    
+                    try:
+                        queries_data = json.loads(json_str)
+                        
+                        # 验证结果是否为列表
+                        if isinstance(queries_data, list):
+                            # 验证并处理每个查询
+                            for i, query in enumerate(queries_data):
+                                if not isinstance(query, str):
+                                    logger.warning(f"PID-{process_id} Node-{node_display_id}: 第{i+1}个新查询不是字符串类型，尝试转换")
+                                    if isinstance(query, dict):
+                                        # 尝试提取常见字段
+                                        for key in ['query', 'q', 'text', 'content']:
+                                            if key in query and isinstance(query[key], str):
+                                                new_queries.append(query[key])
+                                                break
+                                        else:
+                                            # 如果找不到有效字段，使用整个对象的字符串表示
+                                            new_queries.append(str(query))
+                                    else:
+                                        # 对于其他类型，转为字符串
+                                        new_queries.append(str(query) if query is not None else "")
+                                else:
+                                    new_queries.append(query)
+                        else:
+                            logger.warning(f"PID-{process_id} Node-{node_display_id}: 解析的新查询JSON不是列表: {json_str}")
+                            # 使用单个标题作为查询
+                            new_queries = [node['title']]
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"PID-{process_id} Node-{node_display_id}: 解析新查询JSON失败: {e}")
+                        # 尝试按行分割文本以提取可能的查询
+                        if '\n' in response:
+                            # 尝试按行分割
+                            lines = [line.strip() for line in response.split('\n') if line.strip() and not line.startswith('[') and not line.endswith(']')]
+                            if lines:
+                                logger.info(f"PID-{process_id} Node-{node_display_id}: 从文本中提取到{len(lines)}个可能的新查询")
+                                new_queries = lines
+                        else:
+                            logger.warning(f"PID-{process_id} Node-{node_display_id}: 无法在响应中找到新查询JSON: {response}")
+                        
+                    # 如果能提取到有效新查询，则添加到总查询列表
+                    if new_queries:
+                        all_used_queries.extend(new_queries)
+                        queries = new_queries  # 设置为下一轮迭代的查询
+                        iteration += 1
                     else:
-                        logger.warning(f"PID-{process_id} Node-{node_display_id}: 解析的新查询JSON不是列表: {json_str}")
+                        # 如果没有新查询，停止迭代
+                        logger.warning(f"PID-{process_id} Node-{node_display_id}: 未能提取到有效的新查询，停止迭代")
                         status_manager.update_leaf_node_status(process_id, node_display_id, 
-                            LeafNodeStatusUpdate(status_message="Failed to parse new queries (not a list). Stopping.", is_completed=True, iteration_progress=current_iter_progress)
+                            LeafNodeStatusUpdate(status_message="No valid new queries found. Stopping.", is_completed=True, iteration_progress=current_iter_progress)
                         )
                         break
-                else:
-                    logger.warning(f"PID-{process_id} Node-{node_display_id}: 无法在响应中找到新查询JSON: {response}")
-                    status_manager.update_leaf_node_status(process_id, node_display_id, 
-                        LeafNodeStatusUpdate(status_message="No new queries found in LLM response. Stopping.", is_completed=True, iteration_progress=current_iter_progress)
-                    )
-                    break
             except Exception as e:
                 logger.warning(f"PID-{process_id} Node-{node_display_id}: 处理模型响应生成新查询时出错: {str(e)}")
                 status_manager.update_leaf_node_status(process_id, node_display_id, 
@@ -319,21 +466,42 @@ class UnifiedRetrievalAgent:
         final_node_status = status_manager.get_process_state(process_id).retrieval_status.leaf_nodes_status.get(node_display_id)
         if final_node_status and not final_node_status.is_completed:
             logger.info(f"PID-{process_id} Node-{node_display_id}: 迭代循环结束，标记为完成。")
-            status_manager.update_leaf_node_status(process_id, node_display_id, 
-                LeafNodeStatusUpdate(status_message="Node processing loop finished.", 
-                                 is_completed=True, 
-                                 iteration_progress=f"{iteration}/{self.max_iterations}",
-                                 content_preview=(node['content'][:200] + '...') if node['content'] else "最终内容未生成", # 确保完成时也有最新的内容预览
-                                 retrieved_docs_preview=current_doc_previews if new_results else []) # 如果最后一次迭代没有新文档，则清空或用最后一次的
-            )
-        else:
-             logger.info(f"PID-{process_id} Node-{node_display_id}: 迭代检索完成，状态已更新。")
-             # 确保即使LLM标记完成，也有最新的内容预览
-             final_node_status_obj = status_manager.get_process_state(process_id).retrieval_status.leaf_nodes_status.get(node_display_id)
-             if final_node_status_obj and final_node_status_obj.is_completed:
-                status_manager.update_leaf_node_status(process_id, node_display_id,
-                    LeafNodeStatusUpdate(content_preview=(node['content'][:200] + '...') if node['content'] else "最终内容未生成")
+            
+            # 确保内容预览是字符串
+            content_preview = (node['content'][:200] + '...') if node['content'] else "最终内容未生成"
+            
+            # 避免在更新节点状态时使用不正确的类型
+            try:
+                status_manager.update_leaf_node_status(process_id, node_display_id, 
+                    LeafNodeStatusUpdate(status_message="Node processing loop finished.", 
+                                     is_completed=True, 
+                                     iteration_progress=f"{iteration}/{self.max_iterations}",
+                                     content_preview=content_preview,
+                                     # 验证current_doc_previews类型是否正确，如果没有有效的预览就不更新这个字段
+                                     retrieved_docs_preview=current_doc_previews if current_doc_previews else None) 
                 )
+            except Exception as e:
+                logger.error(f"PID-{process_id} Node-{node_display_id}: 最终状态更新失败: {str(e)}")
+                # 使用更简单的更新避免类型错误
+                try:
+                    status_manager.update_leaf_node_status(process_id, node_display_id, 
+                        LeafNodeStatusUpdate(status_message="Node processing loop finished.", 
+                                        is_completed=True)
+                    )
+                except Exception as e2:
+                    logger.error(f"PID-{process_id} Node-{node_display_id}: 简化状态更新也失败: {str(e2)}")
+        else:
+            logger.info(f"PID-{process_id} Node-{node_display_id}: 迭代检索完成，状态已更新。")
+            # 确保即使LLM标记完成，也有最新的内容预览
+            final_node_status_obj = status_manager.get_process_state(process_id).retrieval_status.leaf_nodes_status.get(node_display_id)
+            if final_node_status_obj and final_node_status_obj.is_completed:
+                content_preview = (node['content'][:200] + '...') if node['content'] else "最终内容未生成"
+                try:
+                    status_manager.update_leaf_node_status(process_id, node_display_id,
+                        LeafNodeStatusUpdate(content_preview=content_preview)
+                    )
+                except Exception as e:
+                    logger.error(f"PID-{process_id} Node-{node_display_id}: 更新内容预览失败: {str(e)}")
     
     def _execute_searches(self, queries: List[str], node: Dict[str, Any], use_web: bool, use_kb: bool, process_id: str, node_display_id: str) -> List[Document]:
         """执行检索，包括网络和本地知识库

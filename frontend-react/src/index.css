@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:wght@300;400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    background-color: #f8fafc;
+    color: #334155;
+    font-family: 'Inter', sans-serif;
+  }
+  
+  h1, h2, h3 {
+    font-family: 'Merriweather', serif;
+  }
+  
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  
+  h3 {
+    font-size: 1.25rem;
+  }
+  
+  a {
+    color: #2563eb;
+    transition: color 0.2s;
+  }
+  
+  a:hover {
+    color: #1d4ed8;
+  }
+}
+
+@layer components {
+  .btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  
+  .btn-primary {
+    background-color: #22c55e;
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    background-color: #16a34a;
+  }
+  
+  .btn-secondary {
+    background-color: #3b82f6;
+    color: white;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #2563eb;
+  }
+  
+  .btn-outline {
+    border: 1px solid #cbd5e1;
+  }
+  
+  .btn-outline:hover {
+    background-color: #f1f5f9;
+  }
+  
+  .card {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+  }
+  
+  .input {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.375rem;
+  }
+  
+  .input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #22c55e;
+    border-color: transparent;
+  }
+  
+  .textarea {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.375rem;
+  }
+  
+  .textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #22c55e;
+    border-color: transparent;
+  }
+}
