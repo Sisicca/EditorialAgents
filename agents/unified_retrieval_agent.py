@@ -161,7 +161,7 @@ class UnifiedRetrievalAgent:
             title=node['title'],
             summary=node['summary']
         )
-
+        
         response = self._complete(initial_prompt, process_id, node_display_id)
         try:
             # 处理可能的markdown格式，去除```json和```
@@ -251,7 +251,7 @@ class UnifiedRetrievalAgent:
                     is_completed=False
                 )
             )
-
+        
         all_used_queries = queries.copy()
         iteration = 0
         
@@ -476,9 +476,9 @@ class UnifiedRetrievalAgent:
                     LeafNodeStatusUpdate(status_message="Node processing loop finished.", 
                                      is_completed=True, 
                                      iteration_progress=f"{iteration}/{self.max_iterations}",
-                                     content_preview=content_preview,
-                                     # 验证current_doc_previews类型是否正确，如果没有有效的预览就不更新这个字段
-                                     retrieved_docs_preview=current_doc_previews if current_doc_previews else None) 
+                                         content_preview=content_preview,
+                                         # 验证current_doc_previews类型是否正确，如果没有有效的预览就不更新这个字段
+                                         retrieved_docs_preview=current_doc_previews if current_doc_previews else None) 
                 )
             except Exception as e:
                 logger.error(f"PID-{process_id} Node-{node_display_id}: 最终状态更新失败: {str(e)}")
@@ -491,14 +491,14 @@ class UnifiedRetrievalAgent:
                 except Exception as e2:
                     logger.error(f"PID-{process_id} Node-{node_display_id}: 简化状态更新也失败: {str(e2)}")
         else:
-            logger.info(f"PID-{process_id} Node-{node_display_id}: 迭代检索完成，状态已更新。")
-            # 确保即使LLM标记完成，也有最新的内容预览
-            final_node_status_obj = status_manager.get_process_state(process_id).retrieval_status.leaf_nodes_status.get(node_display_id)
-            if final_node_status_obj and final_node_status_obj.is_completed:
+             logger.info(f"PID-{process_id} Node-{node_display_id}: 迭代检索完成，状态已更新。")
+             # 确保即使LLM标记完成，也有最新的内容预览
+             final_node_status_obj = status_manager.get_process_state(process_id).retrieval_status.leaf_nodes_status.get(node_display_id)
+             if final_node_status_obj and final_node_status_obj.is_completed:
                 content_preview = (node['content'][:200] + '...') if node['content'] else "最终内容未生成"
                 try:
                     status_manager.update_leaf_node_status(process_id, node_display_id,
-                        LeafNodeStatusUpdate(content_preview=content_preview)
+                            LeafNodeStatusUpdate(content_preview=content_preview)
                     )
                 except Exception as e:
                     logger.error(f"PID-{process_id} Node-{node_display_id}: 更新内容预览失败: {str(e)}")

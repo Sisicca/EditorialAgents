@@ -31,6 +31,7 @@ import useProcessStore from '../store/processStore';
 // 单个节点状态组件
 const RetrievalNodeStatus = ({ nodeStatus }: { nodeStatus: LeafNodeStatus }) => {
   const { isOpen, onToggle } = useDisclosure();
+  const { isOpen: isQueriesOpen, onToggle: onQueriesToggle } = useDisclosure();
   
   // 根据状态选择徽章颜色
   const getBadgeColor = () => {
@@ -51,6 +52,12 @@ const RetrievalNodeStatus = ({ nodeStatus }: { nodeStatus: LeafNodeStatus }) => 
     return nodeStatus.retrieved_docs_preview?.length || 0;
   };
   
+  // 将逗号分隔的查询语句转换为数组
+  const getQueriesArray = () => {
+    if (!nodeStatus.current_query) return [];
+    return nodeStatus.current_query.split(',').map(q => q.trim()).filter(q => q);
+  };
+  
   return (
     <Card mb={4}>
       <CardBody>
@@ -60,15 +67,6 @@ const RetrievalNodeStatus = ({ nodeStatus }: { nodeStatus: LeafNodeStatus }) => 
             <Badge colorScheme={getBadgeColor()} mr={2}>
               {getStatusText()}
             </Badge>
-            {(nodeStatus.retrieved_docs_preview?.length > 0 || nodeStatus.content_preview) && (
-              <IconButton
-                aria-label="显示详情"
-                icon={isOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                size="sm"
-                variant="ghost"
-                onClick={onToggle}
-              />
-            )}
           </Flex>
         </Flex>
         
@@ -89,18 +87,91 @@ const RetrievalNodeStatus = ({ nodeStatus }: { nodeStatus: LeafNodeStatus }) => 
           </Alert>
         )}
         
-        <Collapse in={isOpen} animateOpacity>
-          <Box mt={4} p={3} bg="gray.50" borderRadius="md">
-            {nodeStatus.current_query && (
-              <Box mb={3}>
-                <Text fontWeight="bold" mb={1}>当前查询:</Text>
-                <Text fontSize="sm">{nodeStatus.current_query}</Text>
-              </Box>
-            )}
+        {/* 内容预览 - 单独显示，不在折叠区域内 */}
+        {nodeStatus.content_preview && (
+          <Box mt={4} p={4} bg="blue.50" borderRadius="md">
+            <Text fontWeight="bold" mb={2} fontSize="md">内容预览:</Text>
+            <Box 
+              p={3} 
+              bg="white" 
+              borderRadius="md" 
+              boxShadow="sm"
+              maxH="none" 
+              overflow="auto"
+              whiteSpace="pre-wrap"
+            >
+              <Text>{nodeStatus.content_preview}</Text>
+            </Box>
+          </Box>
+        )}
+        
+        {/* 检索语句竖向显示 */}
+        {nodeStatus.current_query && (
+          <Box mt={4}>
+            <Flex 
+              justify="space-between" 
+              align="center" 
+              onClick={onQueriesToggle} 
+              cursor="pointer"
+              p={2}
+              bg="blue.50"
+              borderRadius="md"
+              _hover={{ bg: "blue.100" }}
+            >
+              <Text fontWeight="bold">检索语句 ({getQueriesArray().length})</Text>
+              <IconButton
+                aria-label="显示检索语句"
+                icon={isQueriesOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                size="sm"
+                variant="ghost"
+              />
+            </Flex>
             
-            {nodeStatus.retrieved_docs_preview && nodeStatus.retrieved_docs_preview.length > 0 && (
-              <Box mb={3}>
-                <Text fontWeight="bold" mb={1}>检索到的文档 ({nodeStatus.retrieved_docs_preview.length}):</Text>
+            <Collapse in={isQueriesOpen} animateOpacity>
+              <Stack mt={2} pl={4} spacing={2}>
+                {getQueriesArray().map((query, index) => (
+                  <Box 
+                    key={index} 
+                    p={2} 
+                    bg="gray.50" 
+                    borderRadius="md" 
+                    borderLeft="3px solid" 
+                    borderLeftColor="blue.400"
+                  >
+                    <Text fontSize="sm">{query}</Text>
+                  </Box>
+                ))}
+              </Stack>
+            </Collapse>
+          </Box>
+        )}
+        
+        {/* 检索文档可折叠区域 */}
+        {nodeStatus.retrieved_docs_preview && nodeStatus.retrieved_docs_preview.length > 0 && (
+          <Box mt={4}>
+            <Flex 
+              justify="space-between" 
+              align="center" 
+              onClick={onToggle} 
+              cursor="pointer"
+              p={2}
+              bg="green.50"
+              borderRadius="md"
+              _hover={{ bg: "green.100" }}
+            >
+              <Text fontWeight="bold">
+                检索文档 ({nodeStatus.retrieved_docs_preview.length})
+              </Text>
+              <IconButton
+                aria-label="显示详情"
+                icon={isOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                size="sm"
+                variant="ghost"
+              />
+            </Flex>
+            
+            <Collapse in={isOpen} animateOpacity>
+              <Box mt={2} p={3} bg="gray.50" borderRadius="md">
                 <Stack>
                   {nodeStatus.retrieved_docs_preview.map(doc => (
                     <Box key={doc.id} fontSize="sm" p={2} bg="white" borderRadius="sm">
@@ -110,16 +181,9 @@ const RetrievalNodeStatus = ({ nodeStatus }: { nodeStatus: LeafNodeStatus }) => 
                   ))}
                 </Stack>
               </Box>
-            )}
-            
-            {nodeStatus.content_preview && (
-              <Box>
-                <Text fontWeight="bold" mb={1}>内容预览:</Text>
-                <Text fontSize="sm" whiteSpace="pre-wrap">{nodeStatus.content_preview}</Text>
-              </Box>
-            )}
+            </Collapse>
           </Box>
-        </Collapse>
+        )}
       </CardBody>
     </Card>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { 
@@ -12,9 +12,11 @@ import {
   Alert,
   AlertIcon,
   useToast,
-  Flex
+  Flex,
+  Progress
 } from '@chakra-ui/react';
 import apiService from '../services/api';
+import type { ArticleResponse } from '../services/api';
 import useProcessStore from '../store/processStore';
 
 const ArticlePage = () => {
@@ -71,24 +73,30 @@ const ArticlePage = () => {
     queryKey: ['article', processId],
     queryFn: () => apiService.getArticle(processId!),
     enabled: !!processId,
-    refetchInterval: (data) => {
+    refetchInterval: (data: unknown) => {
+      // 使用明确类型
+      const articleData = data as ArticleResponse | undefined;
       // 如果文章已完成或出错，停止轮询
-      if (data?.composition_status === 'Completed' || 
-          data?.composition_status === 'Error') {
+      if (articleData?.composition_status === 'Completed' || 
+          articleData?.composition_status === 'Error') {
         return false;
       }
       // 否则每3秒轮询一次
       return 3000;
-    },
-    onSuccess: (data) => {
+    }
+  });
+
+  // 文章数据变化时更新全局状态
+  useEffect(() => {
+    if (articleQuery.data) {
+      const data = articleQuery.data as ArticleResponse;
       console.log('文章状态:', data);
-      // 更新全局状态
       setCompositionStatus(data.composition_status);
       if (data.article_content) {
         setArticleContent(data.article_content);
       }
     }
-  });
+  }, [articleQuery.data, setCompositionStatus, setArticleContent]);
 
   // 导出为PDF（示例功能，实际需要后端支持）
   const handleExportPDF = () => {
@@ -142,10 +150,14 @@ const ArticlePage = () => {
     );
   }
 
-  // 获取文章状态
-  const status = articleQuery.data?.composition_status || 'Not Started';
+  // 获取文章状态和内容 - 使用类型断言
+  const data = articleQuery.data as ArticleResponse;
+  const status = data?.composition_status || 'Not Started';
   // 获取文章内容
-  const content = articleQuery.data?.article_content || articleContent;
+  const content = data?.article_content || articleContent || '';
+
+  // 文章内容 - 仅在已完成状态或有内容且非生成中状态下显示
+  const shouldShowContent = status === 'Completed' || (!!content && status !== 'In Progress');
 
   return (
     <Box py={10} maxW="800px" mx="auto">
@@ -176,24 +188,62 @@ const ArticlePage = () => {
         </Box>
       )}
       
-      {/* 等待中 */}
+      {/* 等待中 - 确保在状态为"In Progress"时总是显示等待动画 */}
       {status === 'In Progress' && (
-        <Box mb={6} p={4} bg="white" borderRadius="md" boxShadow="md" textAlign="center">
+        <Box mb={6} p={6} bg="white" borderRadius="md" boxShadow="md" textAlign="center">
           <Heading size="md" mb={4}>文章生成中</Heading>
-          <Spinner size="xl" color="green.500" thickness="4px" my={6} />
-          <Text>AI正在创作您的文章，请耐心等待...</Text>
+          <Box position="relative" my={8}>
+            <Spinner 
+              size="xl" 
+              color="green.500" 
+              thickness="4px" 
+              speed="0.8s"
+              emptyColor="gray.200"
+            />
+            <Box 
+              position="absolute" 
+              top="50%" 
+              left="50%" 
+              transform="translate(-50%, -50%)" 
+              fontSize="sm" 
+              color="green.600"
+            >
+              AI思考中
+            </Box>
+          </Box>
+          
+          <Progress 
+            hasStripe 
+            isAnimated 
+            colorScheme="green" 
+            size="sm" 
+            value={80} 
+            borderRadius="md"
+            mb={4}
+          />
+          
+          <Stack spacing={4} mt={6} maxW="md" mx="auto">
+            <Text fontWeight="medium">AI正在创作您的文章，请耐心等待...</Text>
+            <Text fontSize="sm" color="gray.600">
+              根据文章复杂度，完成时间约为1-3分钟
+            </Text>
+            <Text fontSize="sm" color="gray.500" fontStyle="italic">
+              AI正在分析检索数据，整合观点，生成流畅的文章内容
+            </Text>
+          </Stack>
+          
           {articleQuery.isFetching && (
-            <Text mt={2} fontSize="sm" color="blue.500">
+            <Text mt={4} fontSize="sm" color="blue.500">
               正在获取最新状态...
             </Text>
           )}
         </Box>
       )}
       
-      {/* 文章内容 */}
-      {content && (
+      {/* 文章内容 - 仅在已完成状态或有内容且非生成中状态下显示 */}
+      {shouldShowContent && (
         <Box bg="white" p={8} borderRadius="md" boxShadow="md">
-          {articleQuery.data?.article_content ? (
+          {data?.article_content ? (
             <>
               <Text color="gray.600" mb={6}>
                 状态: {status === 'Completed' ? '已完成' : '生成中...'}

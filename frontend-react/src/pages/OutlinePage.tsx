@@ -27,7 +27,11 @@ import {
   FormLabel,
   Input,
 } from '@chakra-ui/react';
-import { ChevronDownIcon, ChevronUpIcon, AddIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
+import { 
+  AddIcon, 
+  DeleteIcon, 
+  EditIcon 
+} from '@chakra-ui/icons';
 import useProcessStore from '../store/processStore';
 import apiService from '../services/api';
 import type { OutlineNode, OutlineUpdateRequest } from '../services/api';
@@ -50,7 +54,7 @@ const OutlineNodeComponent = ({
   node: OutlineNode, 
   onUpdate: (updatedNode: OutlineNode, path: number[]) => void,
   onAddChild: (parentId: string) => void,
-  onDelete: (nodeId: string, path: number[]) => void,
+  onDelete: (path: number[]) => void,
   level?: number,
   path?: number[]
 }) => {
@@ -127,7 +131,7 @@ const OutlineNodeComponent = ({
                   size="sm"
                   variant="ghost"
                   colorScheme="red"
-                  onClick={() => onDelete(node.id, path)}
+                  onClick={() => onDelete(path)}
                 />
               </Flex>
             </Flex>
@@ -163,7 +167,6 @@ const OutlinePage = () => {
     outline, 
     setOutline, 
     currentTopic, 
-    setCurrentTopic, 
     currentProcessId, 
     setCurrentProcessId 
   } = useProcessStore();
@@ -287,7 +290,7 @@ const OutlinePage = () => {
   };
 
   // 处理删除章节
-  const handleDeleteNode = (nodeId: string, path: number[]) => {
+  const handleDeleteNode = (path: number[]) => {
     if (!outline) return;
     
     // 确认是否要删除
@@ -356,7 +359,17 @@ const OutlinePage = () => {
 
   // 确认添加新章节
   const confirmAddNode = () => {
-    if (!outline || !newNodeParentId) return;
+    if (!outline || !newNodeParentId) {
+      console.log("无法添加章节：outline或parentId为空", {outline, newNodeParentId});
+      toast({
+        title: "添加章节失败",
+        description: "大纲数据或父节点ID丢失",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
     
     if (!newNodeTitle.trim()) {
       toast({
@@ -368,6 +381,12 @@ const OutlinePage = () => {
       return;
     }
     
+    console.log("准备添加新章节:", {
+      parentId: newNodeParentId,
+      title: newNodeTitle,
+      summary: newNodeSummary
+    });
+    
     const newNode: OutlineNode = {
       id: generateNodeId(),
       title: newNodeTitle,
@@ -376,64 +395,103 @@ const OutlinePage = () => {
       children: []
     };
     
-    const newOutline = JSON.parse(JSON.stringify(outline)) as OutlineNode;
-    
-    // 添加到根节点
-    if (newNodeParentId === newOutline.id) {
-      newNode.level = newOutline.level + 1;
-      if (!newOutline.children) {
-        newOutline.children = [];
-      }
-      newOutline.children.push(newNode);
-      setOutline(newOutline);
-      onClose();
-      return;
-    }
-    
-    // 递归查找父节点并添加新节点
-    let addedSuccessfully = false;
-    
-    const addNodeToParent = (node: OutlineNode): boolean => {
-      if (node.id === newNodeParentId) {
-        newNode.level = node.level + 1;
-        if (!node.children) {
-          node.children = [];
+    try {
+      // 创建outline的深拷贝，避免直接修改状态
+      const newOutline = JSON.parse(JSON.stringify(outline)) as OutlineNode;
+      
+      // 添加到根节点
+      if (newNodeParentId === newOutline.id) {
+        console.log("添加到根节点");
+        newNode.level = newOutline.level + 1;
+        if (!newOutline.children) {
+          newOutline.children = [];
         }
-        node.children.push(newNode);
-        return true;
+        newOutline.children.push(newNode);
+        
+        // 使用函数形式的setState确保使用最新状态
+        setOutline(newOutline);
+        
+        // 更新后提示成功
+        toast({
+          title: "章节已添加",
+          description: `已添加章节: ${newNodeTitle}`,
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+        
+        // 关闭模态框并重置状态
+        setNewNodeTitle("");
+        setNewNodeSummary("");
+        setNewNodeParentId(null);
+        onClose();
+        return;
       }
       
-      if (node.children && node.children.length > 0) {
-        for (let i = 0; i < node.children.length; i++) {
-          if (addNodeToParent(node.children[i])) {
-            return true;
+      // 递归查找父节点并添加新节点
+      let addedSuccessfully = false;
+      
+      const addNodeToParent = (node: OutlineNode): boolean => {
+        if (node.id === newNodeParentId) {
+          console.log("找到父节点:", node.title);
+          newNode.level = node.level + 1;
+          if (!node.children) {
+            node.children = [];
+          }
+          node.children.push(newNode);
+          return true;
+        }
+        
+        if (node.children && node.children.length > 0) {
+          for (let i = 0; i < node.children.length; i++) {
+            if (addNodeToParent(node.children[i])) {
+              return true;
+            }
           }
         }
-      }
+        
+        return false;
+      };
       
-      return false;
-    };
-    
-    addedSuccessfully = addNodeToParent(newOutline);
-    
-    if (addedSuccessfully) {
-      setOutline(newOutline);
-      toast({
-        title: "章节已添加",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-      });
-    } else {
+      addedSuccessfully = addNodeToParent(newOutline);
+      
+      if (addedSuccessfully) {
+        console.log("章节添加成功，更新状态");
+        // 重要：使用setOutline触发状态更新和重新渲染
+        setOutline(newOutline);
+        
+        toast({
+          title: "章节已添加",
+          description: `已添加章节: ${newNodeTitle}`,
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      } else {
+        console.error("添加失败，找不到父节点:", newNodeParentId);
+        toast({
+          title: "添加失败",
+          description: "无法找到父章节",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error("添加章节时发生错误:", error);
       toast({
         title: "添加失败",
-        description: "无法找到父章节",
+        description: "处理过程中发生错误",
         status: "error",
         duration: 3000,
         isClosable: true,
       });
     }
     
+    // 无论成功或失败，都关闭模态框并重置状态
+    setNewNodeTitle("");
+    setNewNodeSummary("");
+    setNewNodeParentId(null);
     onClose();
   };
 

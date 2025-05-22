@@ -23,7 +23,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <ChakraProvider theme={theme}>
         <QueryClientProvider client={queryClient}>
-          <App />
+    <App />
         </QueryClientProvider>
       </ChakraProvider>
     </BrowserRouter>
