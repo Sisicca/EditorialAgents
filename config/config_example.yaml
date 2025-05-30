@@ -1,34 +1,45 @@
 initial_analysis:
-  api_key: "YOUR OPENAI_API_KEY"
-  base_url: "YOUR OPENAI_BASE_URL"
-  model: "model"
+  api_key: "YOUR_OPENAI_API_KEY"
+  base_url: "YOUR_OPENAI_BASE_URL"
+  model: "gpt-4o"
 
 web_search:
-  api_key: "YOUR OPENAI_API_KEY"
-  base_url: "YOUR OPENAI_BASE_URL"
-  model: "model"
+  api_key: "YOUR_OPENAI_API_KEY"
+  base_url: "YOUR_OPENAI_BASE_URL"
+  model: "gpt-4o"
   search_engine: "tavily"
-  search_api_key: "YOUR TAVILY_API_KEY"
+  search_api_key: "YOUR_TAVILY_API_KEY"
   web_num: 5
-  max_length: "MAX LENGTH OF WEB DOCUMENT"
-  max_workers: "THE MAX CONCURRENCY NUM OF WEB SEARCH AND REFINE"
+  max_length: 2000
+  max_workers: 10
 
 local_kb:
-  api_key: "YOUR OPENAI_API_KEY"
-  base_url: "YOUR OPENAI_BASE_URL"
-  model: "model"
-  kb_path: ""
-  embedding_model: ""
-  reranker_model: ""
-  k: 100
-  top_n: 5
-  chunk_size: 1200
+  api_key: "YOUR_OPENAI_API_KEY"
+  base_url: "YOUR_OPENAI_BASE_URL"
+  model: "gpt-4o"
+  kb_path: "knowledge_base/test"
+  embedding_model: "models/bce-embedding-base_v1"
+  reranker_model: "models/bce-reranker-base_v1"
+  k: 5
+  top_n: 1
+  chunk_size: 2000
   chunk_overlap: 200
-  device: "YOUR DEVICE CUDA/CPU/MPS..."
-  max_workers: "THE MAX CONCURRENCY NUM OF HY_DOC GENERATE AND REFINE"
+  device: "YOUR_DEVICE" # cuda/cpu/mps
+  max_workers: 10
 
 comprehensive_answer:
-  api_key: "YOUR OPENAI_API_KEY"
-  base_url: "YOUR OPENAI_BASE_URL"
-  model: "model"
-  max_workers: "THE MAX CONCURRENCY NUM OF COMPOSE"
+  api_key: "YOUR_OPENAI_API_KEY"
+  base_url: "YOUR_OPENAI_BASE_URL"
+  model: "gpt-4o"
+  max_workers: 10
+
+unified_search:
+  max_iterations: 2  # 最大迭代次数
+  web_max_concurrency: 5  # 每个节点的网络请求并发数
+  local_max_concurrency: 2  # 每个节点的本地检索并发数
+  max_retries: 3  # 检索失败重试次数
+  retry_delay: 1  # 重试延迟（秒）
+  similarity_threshold: 0.7  # 文档相似度阈值
+  api_key: "YOUR_OPENAI_API_KEY"
+  base_url: "YOUR_OPENAI_BASE_URL"
+  model: "gpt-4o"
