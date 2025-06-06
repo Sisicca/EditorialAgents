@@ -9,6 +9,7 @@ knowledge_base/sleep
 .DS_Store
 
 *.ipynb
+*.mp4
 
 */__pycache__
 
