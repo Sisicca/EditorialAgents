@@ -45,26 +45,27 @@ EditorialAgents 旨在自动化生成科学文章，适用于自然科学、医�
 EditorialAgents 由以下几个关键组件组成：
 
 - **问题初步分析 Agent**
+
   - 分析问题并给出框架
-  
 - **网络检索 Agent**
+
   - 使用 Tavily 搜索引擎进行关键词检索
   - 为检索到的文档生成总结
-  
 - **本地知识库检索 Agent**
+
   - 生成假设性文档
   - 使用假设性文档进行检索
   - 为检索到的文档生成总结
-  
 - **深度迭代检索模块**
+
   - 系统性分析并提取所有有价值信息
   - 自动评估内容完整性，确定是否需要进一步检索
   - 基于内容空缺生成针对性的检索查询
-  
 - **综合回答 Agent**
-  - 根据所有检索文档和整体框架，分段落完成写作
 
+  - 根据所有检索文档和整体框架，分段落完成写作
 - **Web 界面**
+
   - 用户友好的交互界面
   - 大纲编辑功能
   - 检索状态实时监控
@@ -77,21 +78,25 @@ EditorialAgents 由以下几个关键组件组成：
 [uv](https://hellowac.github.io/uv-zh-cn/) 是一个现代化的 Python 包管理工具，用于替代传统的 pip。安装 uv 的方法如下：
 
 **MacOS/Linux**:
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 **Windows**:
+
 ```bash
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 **直接使用pip安装**:
+
 ```bash
 pip install uv
 ```
 
 验证安装:
+
 ```bash
 uv --version
 ```
@@ -157,6 +162,7 @@ code config/config.yaml
 ```
 
 请确保替换以下关键配置：
+
 - OpenAI API 密钥
 - 基础 URL
 - Tavily 搜索 API 密钥
@@ -186,6 +192,7 @@ npm install
 
 # 启动开发服务器
 npm run dev
+# 或：.\node_modules\.bin\vite
 ```
 
 启动后，您可以通过浏览器访问 http://localhost:5173/ 打开应用。

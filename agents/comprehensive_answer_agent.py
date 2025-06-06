@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class ComprehensiveAnswerAgent:
     def __init__(self, config):
         self.llm = ChatOpenAI(
-            api_key=config['api_key'],
-            base_url=config['base_url'],
+            api_key=config['api_key'] or os.environ["OPENAI_API_KEY"],
+            base_url=config['base_url'] or os.environ["OPENAI_BASE_URL"],
             model=config['model'],
         )
         # 设置最大线程数，可以根据实际情况调整
@@ -84,15 +84,34 @@ class ComprehensiveAnswerAgent:
             logger.error(f"生成节点内容失败 (标题: {node.get('title', 'Unknown')}): {e}")
             node['content'] = ""
 
-    def compose(self, framework: ArticleOutline) -> ArticleOutline:
-        """为文章大纲中的每个节点生成综合性内容，使用多线程优化"""
+    def compose(self, framework: ArticleOutline, skip_function=None) -> ArticleOutline:
+        """为文章大纲中的每个节点生成综合性内容，使用多线程优化
+        
+        Args:
+            framework: 文章框架对象
+            skip_function: 可选的跳过函数，用于判断是否跳过某个节点的内容生成
+        """
         curr_level = framework.find_max_level()
         logger.info(f"文章大纲的最大层级为: {curr_level}")
         
         while curr_level >= 1:
             curr_nodes = framework.find_level_n_nodes(level_n=curr_level)
+            
+            # 如果提供了skip_function，过滤掉需要跳过的节点
+            if skip_function:
+                original_count = len(curr_nodes)
+                curr_nodes = [node for node in curr_nodes if not skip_function(node)]
+                skipped_count = original_count - len(curr_nodes)
+                logger.info(f"层级 {curr_level}: 跳过了 {skipped_count} 个节点（引言/总结），剩余 {len(curr_nodes)} 个节点需要生成内容")
+            else:
+                logger.info(f"处理层级 {curr_level}，共有 {len(curr_nodes)} 个节点。")
+            
             num_nodes = len(curr_nodes)
-            logger.info(f"处理层级 {curr_level}，共有 {num_nodes} 个节点。")
+            
+            # 如果当前层级没有需要处理的节点，跳过
+            if num_nodes == 0:
+                curr_level -= 1
+                continue
             
             # 使用 ThreadPoolExecutor 来并发处理节点
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:

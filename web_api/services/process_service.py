@@ -51,13 +51,16 @@ class ProcessService:
         return OutlineUpdateResponse(process_id=process_id, message="Outline updated successfully.")
 
     def _extract_leaf_nodes_info(self, outline_dict: Dict[str, Any]) -> List[Tuple[str, str]]:
-        """ Helper to get (node_id, title) for all leaf nodes from an outline dictionary """
+        """ Helper to get (node_id, title) for all leaf nodes from an outline dictionary, excluding intro/conclusion """
         leaf_nodes_info = []
         # Create a temporary ArticleOutline object to use its methods
         # This assumes ArticleOutline can be instantiated with just the dict for this purpose
         temp_outline_obj = ArticleOutline(outline_dict) 
         
         leaf_nodes = temp_outline_obj.find_leaf_nodes()
+        
+        # Get intro_conclusion_agent to use its skip function
+        intro_conclusion_agent = self.agent_integrator.get_intro_conclusion_agent()
         
         # We need a consistent way to get a unique ID for each node that matches 
         # what UnifiedRetrievalAgent._get_node_display_id will produce.
@@ -70,6 +73,10 @@ class ProcessService:
              return f"level{node.get('level', 'N')}-{node.get('title', 'Untitled').replace(' ', '_')[:30]}"
 
         for node_dict in leaf_nodes:
+            # 跳过引言和结论节点
+            if intro_conclusion_agent.should_skip_retrieval(node_dict):
+                continue
+                
             node_id = get_temp_node_display_id(node_dict) # Must match agent's internal ID
             title = node_dict.get('title', 'Unknown Leaf')
             leaf_nodes_info.append((node_id, title))
@@ -95,6 +102,7 @@ class ProcessService:
 
         # Get a fresh agent instance
         retrieval_agent = self.agent_integrator.get_unified_retrieval_agent()
+        intro_conclusion_agent = self.agent_integrator.get_intro_conclusion_agent()
         
         background_tasks.add_task(
             retrieval_agent.iterative_retrieval_for_leaf_nodes,
@@ -102,7 +110,8 @@ class ProcessService:
             process_id, 
             self.status_manager, # Pass the singleton instance
             retrieval_request.use_web,
-            retrieval_request.use_kb
+            retrieval_request.use_kb,
+            intro_conclusion_agent.should_skip_retrieval  # 跳过引言和结论部分的检索
         )
         
         return RetrievalStartResponse(
@@ -134,14 +143,31 @@ class ProcessService:
         framework_obj = ArticleOutline(process_state.outline_dict) # This should be the one modified by retrieval
 
         comp_agent = self.agent_integrator.get_comprehensive_answer_agent()
+        intro_conclusion_agent = self.agent_integrator.get_intro_conclusion_agent()
         
         # The compose method in the agent is synchronous
         def composition_task():
             try:
+                # 更新状态：开始生成主体内容
+                self.status_manager.update_composition_status(process_id, "正在生成主体内容...")
+                
                 # ScienceArticleChain has the logic for _compile_references
                 # We need to replicate or call that here if not using the full chain.
                 # For now, let's assume comp_agent.compose populates framework_obj.outline['content'] for the main article
-                comp_agent.compose(framework_obj) # Modifies framework_obj in place
+                comp_agent.compose(framework_obj, skip_function=intro_conclusion_agent.should_skip_retrieval) # Modifies framework_obj in place
+                
+                # 更新状态：开始生成引言和结论
+                self.status_manager.update_composition_status(process_id, "正在生成引言和结论...")
+                
+                # 生成引言和结论
+                intro_conclusion_agent.generate_introduction_and_conclusion(
+                    framework=framework_obj,
+                    topic=process_state.topic,
+                    description=process_state.description
+                )
+                
+                # 更新状态：正在整理文章格式
+                self.status_manager.update_composition_status(process_id, "正在整理文章格式...")
                 
                 final_article_content = framework_obj.outline.get('content', "Error: Main content not generated.")
                 

@@ -33,6 +33,11 @@ comprehensive_answer:
   model: "gpt-4o"
   max_workers: 10
 
+intro_conclusion:
+  api_key: "YOUR_OPENAI_API_KEY"
+  base_url: "YOUR_OPENAI_BASE_URL"
+  model: "gpt-4o"
+
 unified_search:
   max_iterations: 2  # 最大迭代次数
   web_max_concurrency: 5  # 每个节点的网络请求并发数

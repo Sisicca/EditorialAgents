@@ -160,8 +160,8 @@ class ArticleOutline():
 
 class InitialAnalysisAgent:
     def __init__(self, config:dict):
-        self.llm = ChatOpenAI(api_key=config['api_key'],
-                              base_url=config['base_url'],
+        self.llm = ChatOpenAI(api_key=config['api_key'] or os.environ['OPENAI_API_KEY'],
+                              base_url=config['base_url'] or os.environ['OPENAI_BASE_URL'],
                               model=config['model'])
         
         

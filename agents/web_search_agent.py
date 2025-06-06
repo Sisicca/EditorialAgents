@@ -8,6 +8,7 @@ from typing import List
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+import os
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -15,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 class WebSearchAgent:
     def __init__(self, config):
-        self.llm = ChatOpenAI(api_key=config['api_key'],
-                              base_url=config['base_url'],
+        self.llm = ChatOpenAI(api_key=config['api_key'] or os.environ['OPENAI_API_KEY'],
+                              base_url=config['base_url'] or os.environ['OPENAI_BASE_URL'],
                               model=config['model'])
         self.web_num = config['web_num']
         # 设置最大线程数，可以根据实际情况调整
@@ -24,7 +25,7 @@ class WebSearchAgent:
         self.max_length = config['max_length']
         
         if config['search_engine'] == 'tavily':
-            self.search_client = TavilyClient(api_key=config['search_api_key'])
+            self.search_client = TavilyClient(api_key=config['search_api_key'] or os.environ['TAVILY_API_KEY'])
         else:
             raise ImportError("'search_engine' must be 'tavily'.")
         

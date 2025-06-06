@@ -83,15 +83,15 @@ class UnifiedRetrievalAgent:
         
         # 初始化OpenAI客户端
         self.llm = OpenAI(
-            api_key=web_config['api_key'],
-            base_url=web_config['base_url']
+            api_key=web_config['api_key'] or os.environ['OPENAI_API_KEY'],
+            base_url=web_config['base_url'] or os.environ['OPENAI_BASE_URL']
         )
         self.model = web_config['model']
         
         # 初始化提示模板
         self.prompts = PROMPTS
     
-    def iterative_retrieval_for_leaf_nodes(self, framework, process_id: str, status_manager: Any, use_web: bool = True, use_kb: bool = True):
+    def iterative_retrieval_for_leaf_nodes(self, framework, process_id: str = None, status_manager: Any = None, use_web: bool = True, use_kb: bool = True, skip_function=None):
         """对大纲的所有叶节点进行迭代检索
         
         Args:
@@ -100,13 +100,34 @@ class UnifiedRetrievalAgent:
             status_manager: 状态管理器实例
             use_web: 是否使用网络检索
             use_kb: 是否使用本地知识库检索
+            skip_function: 可选的跳过函数，用于判断是否跳过某个节点的检索
         """
+        # 兼容性处理：如果没有提供process_id和status_manager，使用默认值
+        if process_id is None:
+            process_id = "default"
+        if status_manager is None:
+            # 创建一个简单的mock状态管理器
+            class MockStatusManager:
+                def update_overall_retrieval_message(self, *args, **kwargs):
+                    pass
+                def update_leaf_node_status(self, *args, **kwargs):
+                    pass
+            status_manager = MockStatusManager()
+        
         logger.info(f"PID-{process_id}: 开始对叶节点进行迭代检索. 使用网络: {use_web}, 使用知识库: {use_kb}")
         status_manager.update_overall_retrieval_message(process_id, f"Retrieval In Progress: Processing {framework.find_leaf_nodes().__len__()} leaf nodes.")
         
         # 获取所有叶节点
         leaf_nodes = framework.find_leaf_nodes()
-        logger.info(f"PID-{process_id}: 找到 {len(leaf_nodes)} 个叶节点")
+        
+        # 如果提供了skip_function，过滤掉需要跳过的节点
+        if skip_function:
+            original_count = len(leaf_nodes)
+            leaf_nodes = [node for node in leaf_nodes if not skip_function(node)]
+            skipped_count = original_count - len(leaf_nodes)
+            logger.info(f"PID-{process_id}: 跳过了 {skipped_count} 个节点（引言/总结），剩余 {len(leaf_nodes)} 个叶节点需要检索")
+        else:
+            logger.info(f"PID-{process_id}: 找到 {len(leaf_nodes)} 个叶节点")
         
         # 使用线程池并发处理每个叶节点
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -882,4 +903,4 @@ class UnifiedRetrievalAgent:
         if response.endswith("```"):
             response = response[:-3]
             
-        return response.strip() 
+        return response.strip()

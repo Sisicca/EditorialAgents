@@ -188,8 +188,8 @@ const ArticlePage = () => {
         </Box>
       )}
       
-      {/* 等待中 - 确保在状态为"In Progress"时总是显示等待动画 */}
-      {status === 'In Progress' && (
+      {/* 等待中 - 确保在状态为"In Progress"或包含具体状态信息时总是显示等待动画 */}
+      {(status === 'In Progress' || (status && status.includes('正在'))) && (
         <Box mb={6} p={6} bg="white" borderRadius="md" boxShadow="md" textAlign="center">
           <Heading size="md" mb={4}>文章生成中</Heading>
           <Box position="relative" my={8}>
@@ -208,7 +208,8 @@ const ArticlePage = () => {
               fontSize="sm" 
               color="green.600"
             >
-              AI思考中
+              {/* 显示具体的生成状态，如果没有具体状态则显示默认文本 */}
+              {status && status.includes('正在') ? status : 'AI思考中'}
             </Box>
           </Box>
           
@@ -217,18 +218,27 @@ const ArticlePage = () => {
             isAnimated 
             colorScheme="green" 
             size="sm" 
-            value={80} 
+            value={status && status.includes('引言和结论') ? 90 : status && status.includes('整理文章格式') ? 95 : 70} 
             borderRadius="md"
             mb={4}
           />
           
           <Stack spacing={4} mt={6} maxW="md" mx="auto">
-            <Text fontWeight="medium">AI正在创作您的文章，请耐心等待...</Text>
+            <Text fontWeight="medium">
+              {status && status.includes('正在') ? 
+                `${status}，请耐心等待...` : 
+                'AI正在创作您的文章，请耐心等待...'
+              }
+            </Text>
             <Text fontSize="sm" color="gray.600">
               根据文章复杂度，完成时间约为1-3分钟
             </Text>
             <Text fontSize="sm" color="gray.500" fontStyle="italic">
-              AI正在分析检索数据，整合观点，生成流畅的文章内容
+              {status && status.includes('主体内容') ? 'AI正在分析检索数据，整合观点，生成主体内容' :
+               status && status.includes('引言和结论') ? 'AI正在基于主体内容生成引言和结论' :
+               status && status.includes('整理文章格式') ? 'AI正在整理文章格式和参考文献' :
+               'AI正在分析检索数据，整合观点，生成流畅的文章内容'
+              }
             </Text>
           </Stack>
           
@@ -283,4 +293,4 @@ const ArticlePage = () => {
   );
 };
 
-export default ArticlePage; 
+export default ArticlePage;

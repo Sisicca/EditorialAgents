@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 from agents.initial_analysis_agent import InitialAnalysisAgent, ArticleOutline
 from agents.unified_retrieval_agent import UnifiedRetrievalAgent
 from agents.comprehensive_answer_agent import ComprehensiveAnswerAgent
+from agents.intro_conclusion_agent import IntroductionConclusionAgent
 
 # Configuration loading - adjust path as necessary
 CONFIG_PATH = 'config/config.yaml' # Relative to the root of where the FastAPI app might run from
@@ -38,6 +39,7 @@ class AgentIntegrator:
         self.unified_retrieval_config_web = self.config['web_search']
         self.unified_retrieval_config_kb = self.config['local_kb']
         self.comprehensive_answer_config = self.config['comprehensive_answer']
+        self.intro_conclusion_config = self.config.get('intro_conclusion', {})
 
     def generate_initial_outline(self, topic: str, description: str, problem: str) -> ArticleOutline:
         return self.initial_analysis_agent.get_framework(topic=topic, description=description, problem=problem)
@@ -52,9 +54,12 @@ class AgentIntegrator:
 
     def get_comprehensive_answer_agent(self) -> ComprehensiveAnswerAgent:
         return ComprehensiveAnswerAgent(self.config['comprehensive_answer'])
+    
+    def get_intro_conclusion_agent(self) -> IntroductionConclusionAgent:
+        return IntroductionConclusionAgent(self.intro_conclusion_config)
 
 # Singleton instance of the integrator
 agent_integrator_instance = AgentIntegrator()
 
 def get_agent_integrator() -> AgentIntegrator:
-    return agent_integrator_instance 
+    return agent_integrator_instance

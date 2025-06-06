@@ -1,6 +1,7 @@
 from agents.initial_analysis_agent import InitialAnalysisAgent
 from agents.unified_retrieval_agent import UnifiedRetrievalAgent
 from agents.comprehensive_answer_agent import ComprehensiveAnswerAgent
+from agents.intro_conclusion_agent import IntroductionConclusionAgent
 from loguru import logger
 from rich.pretty import pprint
 
@@ -14,6 +15,9 @@ class ScienceArticleChain:
         
         logger.info("正在创建 ComprehensiveAnswerAgent")
         self.comprehensive_agent = ComprehensiveAnswerAgent(config['comprehensive_answer'])
+        
+        logger.info("正在创建 IntroductionConclusionAgent")
+        self.intro_conclusion_agent = IntroductionConclusionAgent(config['intro_conclusion'])
     
     def run(self, topic, description, problem):
         # 生成框架
@@ -21,11 +25,25 @@ class ScienceArticleChain:
             topic=topic, description=description, problem=problem
         )
         
-        # 使用统一的迭代检索流程替代原来分开的网络和本地知识库检索
-        self.unified_retrieval_agent.iterative_retrieval_for_leaf_nodes(framework=framework)
+        # 使用统一的迭代检索流程，但跳过引言和总结节点
+        self.unified_retrieval_agent.iterative_retrieval_for_leaf_nodes(
+            framework=framework, 
+            skip_function=self.intro_conclusion_agent.should_skip_retrieval
+        )
         
-        # 综合文章内容
-        self.comprehensive_agent.compose(framework=framework)
+        # 综合文章内容（排除引言和总结）
+        self.comprehensive_agent.compose(
+            framework=framework,
+            skip_function=self.intro_conclusion_agent.should_skip_retrieval
+        )
+        
+        # 生成引言和总结
+        logger.info("正在生成引言和总结...")
+        self.intro_conclusion_agent.generate_introduction_and_conclusion(
+            framework=framework,
+            topic=topic,
+            description=description
+        )
         
         # 生成参考文献列表
         content = framework.outline.get('content', '')

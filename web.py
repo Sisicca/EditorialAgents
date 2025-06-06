@@ -10,7 +10,6 @@ from agents.web_search_agent import WebSearchAgent
 from agents.local_kb_agent import LocalKBAgent
 from agents.comprehensive_answer_agent import ComprehensiveAnswerAgent
 
-
 def display_outline_editable(outline_dict):
     # 提取论文主标题 1级
     # 1级 放入container

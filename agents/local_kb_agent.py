@@ -79,8 +79,8 @@ class LocalKBAgent:
         # 设置最大线程数，可以根据实际情况调整
         self.max_workers = config['max_workers']
         
-        self.llm = ChatOpenAI(api_key=config['api_key'],
-                              base_url=config['base_url'],
+        self.llm = ChatOpenAI(api_key=config['api_key'] or os.environ['OPENAI_API_KEY'],
+                              base_url=config['base_url'] or os.environ['OPENAI_BASE_URL'],
                               model=config['model'])
         
         self._create_retriever(
